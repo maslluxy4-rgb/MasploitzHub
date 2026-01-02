@@ -87,7 +87,14 @@ local function createTeamBtn(col, cnt, colVal, y)
                     bt.Text = "Join"
                     tween(bt, 0.2, {BackgroundColor3 = Color3.fromRGB(30, 64, 175)})
                 end
-                wait(0.5)
+                
+                -- Auto return if enabled
+                if backend.settings.autoReturn then
+                    wait(0.3)
+                    backend.returnToSpawn()
+                    wait(0.2)
+                end
+                
                 updateStat("Inactive", Color3.fromRGB(248, 113, 113))
             end)
             
