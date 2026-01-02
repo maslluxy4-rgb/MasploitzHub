@@ -104,15 +104,6 @@ function Backend.startTeleport(teamColor, onTeamJoined)
                 if onTeamJoined then
                     onTeamJoined()
                 end
-                
-                -- Auto return if enabled
-                if Backend.settings.autoReturn and Backend.state.origPos and LP.Character then
-                    local rootPart = LP.Character:FindFirstChild("HumanoidRootPart")
-                    if rootPart then
-                        rootPart.CFrame = Backend.state.origPos
-                        Backend.state.origPos = nil
-                    end
-                end
                 return
             end
             
