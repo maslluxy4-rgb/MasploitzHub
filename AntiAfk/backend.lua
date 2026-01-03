@@ -13,6 +13,11 @@ local P = game:GetService("Players").LocalPlayer
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 
+-- Math clamp helper
+local function clamp(val, min, max)
+    return math.max(min, math.min(max, val))
+end
+
 -- State
 getgenv().MasploitzState = {
     enabled = true,
@@ -97,7 +102,7 @@ local function isPlayerInFront(cf)
             local dist = (targetPos - cf.Position).Magnitude
             
             if dist <= cfg.FRONT_CHECK_DISTANCE then
-                local angle = math.acos(lookVector:Dot(dirToTarget))
+                local angle = math.acos(clamp(lookVector:Dot(dirToTarget), -1, 1))
                 if math.deg(angle) <= cfg.FRONT_CHECK_ANGLE then
                     return true
                 end
@@ -107,23 +112,114 @@ local function isPlayerInFront(cf)
     return false
 end
 
--- Find best spawn
-local function findBestSpot(excludePos)
-    local bestSpot = nil
+-- Generate positions around a point in a circle
+local function generateNearbyPositions(center, radius, count)
+    local positions = {}
+    for i = 1, count do
+        local angle = (math.pi * 2 / count) * i
+        local offset = Vector3.new(
+            math.cos(angle) * radius,
+            0,
+            math.sin(angle) * radius
+        )
+        table.insert(positions, center + offset)
+    end
+    return positions
+end
+
+-- Find best nearby position around a crowded spot
+local function findBestNearbySpot(crowdedPos, crowdedCF)
+    local bestPos = nil
     local maxPlayers = 0
+    local bestCF = nil
     
+    if cfg.DEBUG_MODE then
+        print("🔍 Searching for positions near crowded spot...")
+    end
+    
+    -- Try different distances from crowded spot
+    for radius = 5, 15, 5 do
+        local nearbyPositions = generateNearbyPositions(crowdedPos, radius, 8)
+        
+        for _, pos in pairs(nearbyPositions) do
+            -- Create CFrame facing the crowded spot
+            local lookAt = (crowdedPos - pos).Unit
+            local testCF = CFrame.new(pos, pos + lookAt)
+            
+            -- Check if this position is clear and has good player count
+            if not isPlayerInFront(testCF) then
+                local playerCount = countPlayersNear(pos, cfg.PLAYER_RADIUS)
+                if playerCount > maxPlayers then
+                    maxPlayers = playerCount
+                    bestPos = pos
+                    bestCF = testCF
+                    
+                    if cfg.DEBUG_MODE then
+                        print("  ✅ Found spot at", radius, "studs with", playerCount, "players")
+                    end
+                end
+            end
+        end
+        
+        -- If we found a good spot, use it
+        if bestPos and maxPlayers > 5 then
+            if cfg.DEBUG_MODE then
+                print("  ✨ Selected best nearby spot with", maxPlayers, "players")
+            end
+            break
+        end
+    end
+    
+    return bestCF, maxPlayers
+end
+
+-- Find best spawn with smart crowded spot handling
+local function findBestSpot(excludePos)
+    local bestClearSpot = nil
+    local maxClearPlayers = 0
+    local crowdedSpot = nil
+    local maxCrowdedPlayers = 0
+    local crowdedCF = nil
+    
+    -- First pass: find best clear spot AND most crowded spot
     for _, spawnCF in pairs(cfg.SPAWN_POSITIONS) do
         if not excludePos or (spawnCF.Position - excludePos).Magnitude > 5 then
             local playerCount = countPlayersNear(spawnCF.Position, cfg.PLAYER_RADIUS)
+            local isClear = not isPlayerInFront(spawnCF)
             
-            if not isPlayerInFront(spawnCF) and playerCount > maxPlayers then
-                maxPlayers = playerCount
-                bestSpot = spawnCF
+            -- Track best clear spot
+            if isClear and playerCount > maxClearPlayers then
+                maxClearPlayers = playerCount
+                bestClearSpot = spawnCF
+            end
+            
+            -- Track most crowded spot (even if blocked)
+            if playerCount > maxCrowdedPlayers then
+                maxCrowdedPlayers = playerCount
+                crowdedSpot = spawnCF.Position
+                crowdedCF = spawnCF
             end
         end
     end
     
-    return bestSpot, maxPlayers
+    -- If crowded spot has significantly more players (like 20 vs 3-5)
+    if crowdedSpot and maxCrowdedPlayers > maxClearPlayers + 10 then
+        if cfg.DEBUG_MODE then
+            print("🔍 Found crowded spot with", maxCrowdedPlayers, "players vs best clear", maxClearPlayers)
+        end
+        
+        -- Try to find a nearby position around the crowded spot
+        local nearbySpot, nearbyCount = findBestNearbySpot(crowdedSpot, crowdedCF)
+        
+        if nearbySpot and nearbyCount > maxClearPlayers then
+            if cfg.DEBUG_MODE then
+                print("✅ Found nearby spot with", nearbyCount, "players - using pathfinding!")
+            end
+            return nearbySpot, nearbyCount, true -- true = needs pathfinding
+        end
+    end
+    
+    return bestClearSpot, maxClearPlayers, false
 end
 
 -- Check position validity
@@ -235,7 +331,7 @@ local function relocate()
             getgenv().MasploitzUI.updateStatus("Player blocking! Finding new spot...", Color3.fromRGB(255, 150, 50))
         end
         
-        local bestSpot, bestCount = findBestSpot(root.Position)
+        local bestSpot, bestCount, needsPath = findBestSpot(root.Position)
         
         if bestSpot then
             local PathfindingService = game:GetService("PathfindingService")
@@ -264,7 +360,11 @@ local function relocate()
             state.savedPos = bestSpot
             
             if getgenv().MasploitzUI then
-                getgenv().MasploitzUI.updateStatus("Moved to clear spot!", Color3.fromRGB(100, 200, 255))
+                if needsPath then
+                    getgenv().MasploitzUI.updateStatus("Found crowded area! (" .. bestCount .. " players)", Color3.fromRGB(100, 200, 255))
+                else
+                    getgenv().MasploitzUI.updateStatus("Moved to clear spot!", Color3.fromRGB(100, 200, 255))
+                end
             end
             wait(2)
             if getgenv().MasploitzUI then
@@ -276,28 +376,58 @@ local function relocate()
         return
     end
     
-    -- Check for busier spots
+    -- Check for better spots (including crowded ones)
     local currentCount = countPlayersNear(root.Position, cfg.PLAYER_RADIUS)
-    local bestSpot, bestCount = findBestSpot(root.Position)
+    local bestSpot, bestCount, needsPath = findBestSpot(root.Position)
     
     if bestSpot and bestCount > currentCount + 2 then
         state.relocating = true
         
         if getgenv().MasploitzUI then
-            getgenv().MasploitzUI.updateStatus("Found busier spot! Moving...", Color3.fromRGB(255, 200, 100))
+            if needsPath then
+                getgenv().MasploitzUI.updateStatus("Found crowded spot! Pathfinding...", Color3.fromRGB(255, 200, 100))
+            else
+                getgenv().MasploitzUI.updateStatus("Found busier spot! Moving...", Color3.fromRGB(255, 200, 100))
+            end
         end
         
-        hum.WalkSpeed = cfg.WALK_SPEED_NORMAL
-        hum:MoveTo(bestSpot.Position)
-        
-        local dist = (root.Position - bestSpot.Position).Magnitude
-        wait(dist / cfg.WALK_SPEED_NORMAL + 1)
+        if needsPath then
+            -- Use pathfinding for crowded spots
+            local PathfindingService = game:GetService("PathfindingService")
+            local path = PathfindingService:CreatePath()
+            
+            local success = pcall(function()
+                path:ComputeAsync(root.Position, bestSpot.Position)
+            end)
+            
+            if success and path.Status == Enum.PathStatus.Success then
+                local waypoints = path:GetWaypoints()
+                
+                for _, waypoint in pairs(waypoints) do
+                    if waypoint.Action == Enum.PathWaypointAction.Jump then
+                        hum.Jump = true
+                    end
+                    hum:MoveTo(waypoint.Position)
+                    hum.MoveToFinished:Wait()
+                end
+            else
+                hum:MoveTo(bestSpot.Position)
+                wait(3)
+            end
+        else
+            -- Direct walk for normal spots
+            hum.WalkSpeed = cfg.WALK_SPEED_NORMAL
+            hum:MoveTo(bestSpot.Position)
+            
+            local dist = (root.Position - bestSpot.Position).Magnitude
+            wait(dist / cfg.WALK_SPEED_NORMAL + 1)
+        end
         
         root.CFrame = bestSpot
         state.savedPos = bestSpot
         
         if getgenv().MasploitzUI then
-            getgenv().MasploitzUI.updateStatus("Relocated! New spot saved", Color3.fromRGB(100, 200, 255))
+            getgenv().MasploitzUI.updateStatus("Relocated! (" .. bestCount .. " nearby)", Color3.fromRGB(100, 200, 255))
         end
         wait(2)
         if getgenv().MasploitzUI then
@@ -416,11 +546,41 @@ spawn(function()
     repeat wait() until P.Character and P.Character:FindFirstChild("HumanoidRootPart")
     wait(1)
     
-    local bestSpot, playerCount = findBestSpot(nil)
+    local bestSpot, playerCount, needsPath = findBestSpot(nil)
     
     if not bestSpot then
         bestSpot = cfg.SPAWN_POSITIONS[math.random(1, #cfg.SPAWN_POSITIONS)]
         playerCount = 0
+        needsPath = false
+    end
+    
+    -- If we need pathfinding, walk there first
+    if needsPath and P.Character and P.Character:FindFirstChild("Humanoid") then
+        local hum = P.Character.Humanoid
+        local root = P.Character.HumanoidRootPart
+        
+        if cfg.DEBUG_MODE then
+            print("🚶 Using pathfinding to reach crowded area...")
+        end
+        
+        local PathfindingService = game:GetService("PathfindingService")
+        local path = PathfindingService:CreatePath()
+        
+        local success = pcall(function()
+            path:ComputeAsync(root.Position, bestSpot.Position)
+        end)
+        
+        if success and path.Status == Enum.PathStatus.Success then
+            local waypoints = path:GetWaypoints()
+            
+            for _, waypoint in pairs(waypoints) do
+                if waypoint.Action == Enum.PathWaypointAction.Jump then
+                    hum.Jump = true
+                end
+                hum:MoveTo(waypoint.Position)
+                hum.MoveToFinished:Wait()
+            end
+        end
     end
     
     P.Character.HumanoidRootPart.CFrame = bestSpot
@@ -433,10 +593,17 @@ spawn(function()
     end
     
     if getgenv().MasploitzUI then
-        getgenv().MasploitzUI.updateStatus("Spawned at best spot (" .. playerCount .. " nearby)", Color3.fromRGB(100, 200, 255))
+        local statusMsg = needsPath and 
+            "Found crowded area! (" .. playerCount .. " nearby)" or
+            "Spawned at best spot (" .. playerCount .. " nearby)"
+        getgenv().MasploitzUI.updateStatus(statusMsg, Color3.fromRGB(100, 200, 255))
         spawn(function()
             getgenv().MasploitzUI.showSavedPos()
         end)
+    end
+    
+    if cfg.DEBUG_MODE then
+        print("📍 Initial spawn - Players nearby:", playerCount, "| Pathfinding used:", needsPath)
     end
     
     wait(1)
