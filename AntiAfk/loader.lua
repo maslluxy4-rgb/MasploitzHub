@@ -1,8 +1,6 @@
 -- Masploitz Anti-AFK Loader
 -- GitHub: https://github.com/maslluxy4-rgb/MasploitzHub/tree/main/AntiAfk
-
 local GITHUB_BASE = "https://raw.githubusercontent.com/maslluxy4-rgb/MasploitzHub/main/AntiAfk/"
-
 print("🔥 Loading Masploitz Anti-AFK System...")
 
 -- Shared config between backend and UI
@@ -33,10 +31,10 @@ getgenv().MasploitzConfig = {
     
     -- Position Settings
     PLAYER_RADIUS = 20,
-    FRONT_CHECK_ANGLE = 45          -- Narrow cone in front
-    FRONT_CHECK_DISTANCE = 15       -- 15 studs ahead
-    BLOCK_CHECK_ANGLE = 360         -- Full circle
-    BLOCK_CHECK_DISTANCE = 10       -- 10 studs radius
+    FRONT_CHECK_ANGLE = 45,          -- Narrow cone in front (ADDED COMMA)
+    FRONT_CHECK_DISTANCE = 15,       -- 15 studs ahead (ADDED COMMA)
+    BLOCK_CHECK_ANGLE = 360,         -- Full circle (ADDED COMMA)
+    BLOCK_CHECK_DISTANCE = 10,       -- 10 studs radius (ADDED COMMA)
     
     -- Server Hop Settings
     AUTO_HOP_TIME = 19 * 60, -- 19 minutes
