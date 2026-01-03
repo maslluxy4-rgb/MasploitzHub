@@ -82,7 +82,8 @@ getgenv().MasploitzConfig = {
         "lol",
         "gg"
     },
-
+    
+    -- Debug
     DEBUG_MODE = true
 }
 
