@@ -6,7 +6,7 @@ local RunService = game:GetService("RunService")
 local LP = Players.LocalPlayer
 
 local Backend = {}
-Backend.settings = {autoReturn = true, distance = 3}
+Backend.settings = {autoReturn = true, distance = 3, excludeOwnTeam = false}
 Backend.state = {
     tpOn = false,
     selTeam = nil,
