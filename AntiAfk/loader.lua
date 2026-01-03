@@ -45,17 +45,9 @@ getgenv().MasploitzConfig = {
     AUTO_EQUIP_TOOL = "Sign",
     TOOL_WAIT_TIMEOUT = 999999,
     
-    -- Spawn Positions
-    SPAWN_POSITIONS = {
-        CFrame.new(-3.06, 6.54, -48.03, -1, 0, -0.04, 0, 1, 0, 0.04, 0, -1),
-        CFrame.new(12.67, 6.74, -46.14, -0.89, 0, 0.45, 0, 1, 0, -0.45, 0, -0.89),
-        CFrame.new(37.71, 6.74, -36.19, -0.59, 0, 0.81, 0, 1, 0, -0.81, 0, -0.59),
-        CFrame.new(-24.34, 6.74, -38.91, -0.99, 0, 0.15, 0, 1, 0, -0.15, 0, -0.99),
-        CFrame.new(40.35, 6.74, -21.97, -0.27, 0, 0.96, 0, 1, 0, -0.96, 0, -0.27),
-        CFrame.new(-15.39, 6.74, 46.85, 0.95, 0, -0.33, 0, 1, 0, 0.33, 0, 0.95),
-        CFrame.new(23.11, 6.74, 47.31, 0.98, 0, 0.18, 0, 1, 0, -0.18, 0, 0.98),
-        CFrame.new(42.23, 6.34, 30.49, 0.41, 0, 0.91, 0, 1, 0, -0.91, 0, 0.41)
-    },
+    SEARCH_RADIUS = 100             -- Area to scan
+    SEARCH_GRID_SIZE = 10           -- Grid resolution
+    CENTER_POSITION = Vector3.new(0, 0, 0)  -- Face this point
     
     -- UI Settings
     UI_POSITION = UDim2.new(0.5, -210, 0.5, -165),
