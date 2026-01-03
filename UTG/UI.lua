@@ -229,8 +229,20 @@ function UI.init(backendModule)
     corner(excludeCircle, 11)
     local excludeToggleBtn = c("TextButton", {Parent = excludeToggleF, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Text = "", ZIndex = 6})
     
+    -- Stop On Team Join Toggle
+    local stopJoinF = c("Frame", {Parent = setContent, BackgroundColor3 = Color3.fromRGB(2, 6, 23), Size = UDim2.new(1, 0, 0, 65), Position = UDim2.new(0, 0, 0, 225), BorderSizePixel = 0, ZIndex = 3})
+    corner(stopJoinF, 12) stroke(stopJoinF, Color3.fromRGB(59, 130, 246), 1, 0.2)
+    c("TextLabel", {Parent = stopJoinF, BackgroundTransparency = 1, Size = UDim2.new(0.6, 0, 0, 22), Position = UDim2.new(0, 14, 0, 10), Text = "Stop On Team Join", TextColor3 = Color3.fromRGB(229, 231, 235), Font = Enum.Font.GothamBold, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 4})
+    c("TextLabel", {Parent = stopJoinF, BackgroundTransparency = 1, Size = UDim2.new(0.85, 0, 0, 25), Position = UDim2.new(0, 14, 0, 34), Text = "Stop teleporting when you join the target team", TextColor3 = Color3.fromRGB(139, 147, 167), Font = Enum.Font.Gotham, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, ZIndex = 4})
+    
+    local stopJoinToggleF = c("Frame", {Parent = stopJoinF, BackgroundColor3 = Color3.fromRGB(52, 211, 153), Size = UDim2.new(0, 52, 0, 28), Position = UDim2.new(1, -58, 0.5, -14), BorderSizePixel = 0, ZIndex = 4})
+    corner(stopJoinToggleF, 14) stroke(stopJoinToggleF, Color3.fromRGB(52, 211, 153), 1, 0.3)
+    local stopJoinCircle = c("Frame", {Parent = stopJoinToggleF, BackgroundColor3 = Color3.fromRGB(224, 231, 255), Size = UDim2.new(0, 22, 0, 22), Position = UDim2.new(0, 27, 0.5, -11), BorderSizePixel = 0, ZIndex = 5})
+    corner(stopJoinCircle, 11)
+    local stopJoinToggleBtn = c("TextButton", {Parent = stopJoinToggleF, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Text = "", ZIndex = 6})
+    
     -- Info
-    local infoF = c("Frame", {Parent = setContent, BackgroundColor3 = Color3.fromRGB(6, 78, 59), BackgroundTransparency = 0.65, Size = UDim2.new(1, 0, 0, 85), Position = UDim2.new(0, 0, 0, 225), BorderSizePixel = 0, ZIndex = 3})
+    local infoF = c("Frame", {Parent = setContent, BackgroundColor3 = Color3.fromRGB(6, 78, 59), BackgroundTransparency = 0.65, Size = UDim2.new(1, 0, 0, 85), Position = UDim2.new(0, 0, 0, 300), BorderSizePixel = 0, ZIndex = 3})
     corner(infoF, 12) stroke(infoF, Color3.fromRGB(52, 211, 153), 1, 0.35)
     c("TextLabel", {Parent = infoF, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, -14), Position = UDim2.new(0, 10, 0, 7), Text = "💡 Tip: Lower distances keep you closer to the target. Higher distances give you more space. You'll always face the same direction as your target!", TextColor3 = Color3.fromRGB(229, 231, 235), Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 4})
     
