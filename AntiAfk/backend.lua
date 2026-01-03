@@ -530,6 +530,48 @@ P.Idled:Connect(function()
         end
     end
 end)
+-- Auto Re-Equip Tool (for when tool gets unequipped)
+local function reEquipTool()
+    if not cfg.AUTO_RE_EQUIP then return end
+    
+    local c = P.Character
+    if not c then return end
+    
+    local hum = c:FindFirstChild("Humanoid")
+    if not hum then return end
+    
+    -- Check if tool is already equipped
+    local equippedTool = c:FindFirstChild(cfg.AUTO_EQUIP_TOOL)
+    if equippedTool then 
+        if cfg.DEBUG_MODE then
+            print("🔧 Tool already equipped, skipping re-equip")
+        end
+        return 
+    end
+    
+    -- Try to equip from backpack
+    local backpack = P:FindFirstChild("Backpack")
+    if backpack then
+        local tool = backpack:FindFirstChild(cfg.AUTO_EQUIP_TOOL)
+        if tool then
+            pcall(function()
+                hum:EquipTool(tool)
+                if cfg.DEBUG_MODE then
+                    print("🔧 Re-equipped tool:", cfg.AUTO_EQUIP_TOOL)
+                end
+                if getgenv().MasploitzUI then
+                    getgenv().MasploitzUI.updateStatus("Tool Re-equipped", Color3.fromRGB(100, 255, 150))
+                    wait(1)
+                    getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
+                end
+            end)
+        else
+            if cfg.DEBUG_MODE then
+                warn("⚠️ Tool not found in backpack:", cfg.AUTO_EQUIP_TOOL)
+            end
+        end
+    end
+end
 
 -- Movement loops
 spawn(function() while wait(math.random(cfg.RANDOM_MOVE_MIN, cfg.RANDOM_MOVE_MAX)) do if state.enabled then move() end end end)
@@ -552,8 +594,17 @@ spawn(function()
     end 
 end)
 
--- NEW: Anti-detection features
+-- Anti-detection features
 spawn(function() while wait(10) do if state.enabled then sendChat() playEmote() moveCamera() end end end)
+
+-- Auto Re-Equip Tool Loop
+spawn(function() 
+    while wait(cfg.RE_EQUIP_INTERVAL) do 
+        if state.enabled and cfg.AUTO_RE_EQUIP then 
+            reEquipTool() 
+        end 
+    end 
+end)
 
 -- Auto hop
 spawn(function()
@@ -589,7 +640,6 @@ P.CharacterAdded:Connect(function()
     end
 end)
 
--- Initial spawn
 -- Initial spawn
 spawn(function()
     repeat wait() until P.Character and P.Character:FindFirstChild("HumanoidRootPart")
@@ -681,5 +731,6 @@ getgenv().MasploitzFunctions = {
     toggleEnabled = function()
         state.enabled = not state.enabled
         return state.enabled
-    end
+    end,
+    reEquipTool = reEquipTool  -- Expose for manual re-equip from UI if needed
 }
