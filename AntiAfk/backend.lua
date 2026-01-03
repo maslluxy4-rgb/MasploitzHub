@@ -148,72 +148,7 @@ local function generateNearbyPositions(center, radius, count)
     return positions
 end
 
--- Get all players in the game area
-local function getAllPlayerPositions()
-    local positions = {}
-    for _, player in pairs(game.Players:GetPlayers()) do
-        if player ~= P and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            table.insert(positions, player.Character.HumanoidRootPart.Position)
-        end
-    end
-    return positions
-end
-
-local function createCFrameFacingCenter(position)
-    if not position or not cfg.CENTER_POSITION then
-        return CFrame.new(0, 0, 0)
-    end
-
-    local lookAt = (cfg.CENTER_POSITION - position).Unit
-    return CFrame.new(position, position + lookAt)
-end
-
-
--- Scan area dynamically for best positions
-local function scanForBestPositions()
-    local playerPositions = getAllPlayerPositions()
-    
-    if #playerPositions == 0 then
-        -- No players found, use character's current position
-        if P.Character and P.Character:FindFirstChild("HumanoidRootPart") then
-            return {P.Character.HumanoidRootPart.Position}
-        end
-        return {cfg.CENTER_POSITION}
-    end
-    
-    -- Find clusters of players
-    local hotspots = {}
-    for _, pos in pairs(playerPositions) do
-        local count = countPlayersNear(pos, cfg.PLAYER_RADIUS)
-        if count > 0 then
-            table.insert(hotspots, {position = pos, count = count})
-        end
-    end
-    
-    -- Sort by player count
-    table.sort(hotspots, function(a, b) return a.count > b.count end)
-    
-    return hotspots
-end
-
--- Face center when idle
-local function faceCenter()
-    local c = P.Character
-    if not c or not c:FindFirstChild("HumanoidRootPart") then return end
-    
-    local root = c.HumanoidRootPart
-    local currentPos = root.Position
-    local targetCF = createCFrameFacingCenter(currentPos)
-    
-    -- Only update if not already facing center
-    local currentLook = root.CFrame.LookVector
-    local targetLook = targetCF.LookVector
-    local angleDiff = math.acos(clamp(currentLook:Dot(targetLook), -1, 1))
-    
-    if math.deg(angleDiff) > 5 then -- Only rotate if off by more than 5 degrees
-        root.CFrame = CFrame.new(currentPos, currentPos + targetLook)
-    end
-end
+-- Find best nearby position around a crowded spot
 local function findBestNearbySpot(crowdedPos, crowdedCF)
     local bestPos = nil
     local maxPlayers = 0
@@ -267,46 +202,30 @@ local function findBestSpot(excludePos)
     local maxCrowdedPlayers = 0
     local crowdedCF = nil
     
-    -- Dynamically scan for hotspots
-    local hotspots = scanForBestPositions()
-    
-    if #hotspots == 0 then
-        if cfg.DEBUG_MODE then
-            print("⚠️ No hotspots found, using center position")
-        end
-        return createCFrameFacingCenter(cfg.CENTER_POSITION), 0, false
-    end
-    
-    -- Check each hotspot
-    for _, hotspot in pairs(hotspots) do
-        local pos = hotspot.position
-        local playerCount = hotspot.count
-        
-        -- Skip if too close to excluded position
-        if excludePos and (pos - excludePos).Magnitude < 5 then
-            continue
-        end
-        
-        local testCF = createCFrameFacingCenter(pos)
-        local noFront = not isPlayerInFront(testCF)
-        local noBlock = not isPlayerBlocking(pos)
-        local isClear = noFront and noBlock
-        
-        -- Track best clear spot
-        if isClear and playerCount > maxClearPlayers then
-            maxClearPlayers = playerCount
-            bestClearSpot = testCF
-        end
-        
-        -- Track most crowded spot
-        if playerCount > maxCrowdedPlayers then
-            maxCrowdedPlayers = playerCount
-            crowdedSpot = pos
-            crowdedCF = testCF
+    -- First pass: find best clear spot AND most crowded spot
+    for _, spawnCF in pairs(cfg.SPAWN_POSITIONS) do
+        if not excludePos or (spawnCF.Position - excludePos).Magnitude > 5 then
+            local playerCount = countPlayersNear(spawnCF.Position, cfg.PLAYER_RADIUS)
+            local noFront = not isPlayerInFront(spawnCF)
+            local noBlock = not isPlayerBlocking(spawnCF.Position)
+            local isClear = noFront and noBlock
+            
+            -- Track best clear spot
+            if isClear and playerCount > maxClearPlayers then
+                maxClearPlayers = playerCount
+                bestClearSpot = spawnCF
+            end
+            
+            -- Track most crowded spot (even if blocked)
+            if playerCount > maxCrowdedPlayers then
+                maxCrowdedPlayers = playerCount
+                crowdedSpot = spawnCF.Position
+                crowdedCF = spawnCF
+            end
         end
     end
     
-    -- If crowded spot has significantly more players
+    -- If crowded spot has significantly more players (like 20 vs 3-5)
     if crowdedSpot and maxCrowdedPlayers > maxClearPlayers + 10 then
         if cfg.DEBUG_MODE then
             print("🔍 Found crowded spot with", maxCrowdedPlayers, "players vs best clear", maxClearPlayers)
@@ -319,19 +238,11 @@ local function findBestSpot(excludePos)
             if cfg.DEBUG_MODE then
                 print("✅ Found nearby spot with", nearbyCount, "players - using pathfinding!")
             end
-            return nearbySpot, nearbyCount, true
+            return nearbySpot, nearbyCount, true -- true = needs pathfinding
         end
     end
     
-    -- Return best clear spot or fallback to center
-    if bestClearSpot then
-        return bestClearSpot, maxClearPlayers, false
-    else
-        if cfg.DEBUG_MODE then
-            print("⚠️ No clear spots found, using fallback position")
-        end
-        return createCFrameFacingCenter(crowdedSpot or cfg.CENTER_POSITION), maxCrowdedPlayers, false
-    end
+    return bestClearSpot, maxClearPlayers, false
 end
 
 -- Check position validity
@@ -417,10 +328,6 @@ local function move()
         hum:ChangeState(Enum.HumanoidStateType.Running)
         hum.WalkSpeed = cfg.WALK_SPEED_NORMAL
         
-        -- Face center again after movement
-        wait(0.2)
-        faceCenter()
-        
         if getgenv().MasploitzUI then
             getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
         end
@@ -487,9 +394,7 @@ local function relocate()
                     getgenv().MasploitzUI.updateStatus("Moved to clear spot!", Color3.fromRGB(100, 200, 255))
                 end
             end
-            wait(1)
-            faceCenter() -- Face center after relocating
-            wait(1)
+            wait(2)
             if getgenv().MasploitzUI then
                 getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
             end
@@ -552,9 +457,7 @@ local function relocate()
         if getgenv().MasploitzUI then
             getgenv().MasploitzUI.updateStatus("Relocated! (" .. bestCount .. " nearby)", Color3.fromRGB(100, 200, 255))
         end
-        wait(1)
-        faceCenter() -- Face center after relocating
-        wait(1)
+        wait(2)
         if getgenv().MasploitzUI then
             getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
         end
@@ -641,15 +544,6 @@ spawn(function()
     end 
 end)
 
--- Always face center when idle
-spawn(function()
-    while wait(0.5) do
-        if state.enabled and not state.moving and not state.relocating then
-            pcall(faceCenter)
-        end
-    end
-end)
-
 -- NEW: Anti-detection features
 spawn(function() while wait(10) do if state.enabled then sendChat() playEmote() moveCamera() end end end)
 
@@ -690,22 +584,14 @@ end)
 -- Initial spawn
 spawn(function()
     repeat wait() until P.Character and P.Character:FindFirstChild("HumanoidRootPart")
-    wait(2) -- Wait for players to load
-    
-    if cfg.DEBUG_MODE then
-        print("🔍 Scanning for best initial position...")
-    end
+    wait(1)
     
     local bestSpot, playerCount, needsPath = findBestSpot(nil)
     
     if not bestSpot then
-        bestSpot = createCFrameFacingCenter(cfg.CENTER_POSITION)
+        bestSpot = cfg.SPAWN_POSITIONS[math.random(1, #cfg.SPAWN_POSITIONS)]
         playerCount = 0
         needsPath = false
-        
-        if cfg.DEBUG_MODE then
-            print("⚠️ No optimal spot found, using center position")
-        end
     end
     
     -- If we need pathfinding, walk there first
@@ -763,11 +649,7 @@ spawn(function()
     wait(1)
     equipTool()
     
-    -- Face center
-    wait(0.5)
-    faceCenter()
-    
-    wait(1.5)
+    wait(2)
     if getgenv().MasploitzUI then
         getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
     end
