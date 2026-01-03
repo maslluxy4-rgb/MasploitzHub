@@ -1,110 +1,79 @@
 -- Masploitz Anti-AFK Loader
--- GitHub: https://github.com/maslluxy4-rgb/MasploitzHub/tree/main/AntiAfk
+-- Safe bootstrap + backend loader
 
-local GITHUB_BASE = "https://raw.githubusercontent.com/maslluxy4-rgb/MasploitzHub/main/AntiAfk/"
-
-print("🔥 Loading Masploitz Anti-AFK System...")
-
--- Shared config between backend and UI
-getgenv().MasploitzConfig = {
-    -- Game Settings
-    GAME_ID = 139217467707445,
-    MIN_PLAYERS = 20,
-    
-    -- Movement Settings
-    WALK_SPEED_NORMAL = 16,
-    WALK_SPEED_FAST = 28,
-    MAX_WALK_DISTANCE = 5,
-    MIN_WALK_DISTANCE = 1,
-    
-    -- Jump Settings
-    MIN_JUMPS = 1,
-    MAX_JUMPS = 10,
-    JUMP_INTERVAL = 0.25,
-    
-    -- Timing Settings
-    RANDOM_MOVE_MIN = 1,
-    RANDOM_MOVE_MAX = 60,
-    REGULAR_MOVE_INTERVAL = 10,
-    MICRO_MOVE_MIN = 4,
-    MICRO_MOVE_MAX = 8,
-    SPOT_CHECK_INTERVAL = 1,
-    BLOCK_CHECK_INTERVAL = 1,
-    
-    -- Position Settings
-    PLAYER_RADIUS = 20,
-    FRONT_CHECK_ANGLE = 45,          -- Narrow cone in front
-    FRONT_CHECK_DISTANCE = 15,       -- 15 studs ahead
-    BLOCK_CHECK_ANGLE = 360,         -- Full circle
-    BLOCK_CHECK_DISTANCE = 10,       -- 10 studs radius
-    
-    -- Server Hop Settings
-    AUTO_HOP_TIME = 19 * 60, -- 19 minutes
-    
-    -- Tool Settings
-    AUTO_EQUIP_TOOL = "Sign",
-    TOOL_WAIT_TIMEOUT = 999999,
-    
-    SEARCH_RADIUS = 100             -- Area to scan
-    SEARCH_GRID_SIZE = 10           -- Grid resolution
-    CENTER_POSITION = Vector3.new(0, 0, 0)  -- Face this point
-    
-    -- UI Settings
-    UI_POSITION = UDim2.new(0.5, -210, 0.5, -165),
-    UI_SIZE = UDim2.new(0, 420, 0, 330),
-    UI_BG_COLOR = Color3.fromRGB(15, 45, 65),
-    UI_ACCENT_COLOR = Color3.fromRGB(80, 150, 200),
-    UI_HEADER_COLOR = Color3.fromRGB(10, 35, 55),
-    
-    -- Anti-Detection Settings
-    ENABLE_CHAT_MESSAGES = false,
-    CHAT_INTERVAL_MIN = 120,
-    CHAT_INTERVAL_MAX = 300,
-    ENABLE_EMOTES = true,
-    EMOTE_INTERVAL_MIN = 60,
-    EMOTE_INTERVAL_MAX = 180,
-    ENABLE_CAMERA_MOVE = true,
-    CAMERA_INTERVAL_MIN = 30,
-    CAMERA_INTERVAL_MAX = 90,
-    
-    -- Chat Messages
-    CHAT_MESSAGES = {
-        "afk",
-        "brb",
-        "back",
-        "nice",
-        "lol",
-        "gg"
-    },
-    
-    -- Debug
-    DEBUG_MODE = true
-}
-
--- Load Backend
-local backendSuccess, backendError = pcall(function()
-    loadstring(game:HttpGet(GITHUB_BASE .. "backend.lua"))()
-end)
-
-if not backendSuccess then
-    warn("❌ Failed to load backend:", backendError)
+-- prevent double load
+if getgenv().__MASPLOITZ_LOADER_RUNNING then
+    warn("Masploitz Loader already running")
     return
 end
+getgenv().__MASPLOITZ_LOADER_RUNNING = true
 
-print("✅ Backend loaded successfully")
+-- config safety
+getgenv().MasploitzConfig = getgenv().MasploitzConfig or {}
+local cfg = getgenv().MasploitzConfig
 
--- Small delay
-wait(0.5)
+cfg.GAME_ID = cfg.GAME_ID or game.PlaceId
+cfg.CENTER_POSITION = cfg.CENTER_POSITION or Vector3.new(0, 0, 0)
 
--- Load UI
-local uiSuccess, uiError = pcall(function()
-    loadstring(game:HttpGet(GITHUB_BASE .. "ui.lua"))()
-end)
+cfg.PLAYER_RADIUS = cfg.PLAYER_RADIUS or 20
+cfg.FRONT_CHECK_DISTANCE = cfg.FRONT_CHECK_DISTANCE or 15
+cfg.FRONT_CHECK_ANGLE = cfg.FRONT_CHECK_ANGLE or 45
+cfg.BLOCK_CHECK_DISTANCE = cfg.BLOCK_CHECK_DISTANCE or 10
 
-if not uiSuccess then
-    warn("❌ Failed to load UI:", uiError)
-    return
+cfg.DEBUG_MODE = cfg.DEBUG_MODE == true
+
+-- backend url
+local BACKEND_URL =
+    "https://raw.githubusercontent.com/maslluxy4-rgb/MasploitzHub/main/AntiAfk/backend.lua"
+
+-- load backend safely
+local function loadBackend()
+    local src
+
+    local ok, err = pcall(function()
+        src = game:HttpGet(BACKEND_URL)
+    end)
+    if not ok or type(src) ~= "string" or #src < 20 then
+        warn("Masploitz Loader: HttpGet failed")
+        return false
+    end
+
+    local fn
+    ok, err = pcall(function()
+        fn = loadstring(src)
+    end)
+    if not ok or type(fn) ~= "function" then
+        warn("Masploitz Loader: loadstring failed")
+        return false
+    end
+
+    ok, err = pcall(fn)
+    if not ok then
+        warn("Masploitz Backend error:", err)
+        return false
+    end
+
+    -- verify backend actually initialized
+    if not getgenv().MasploitzState then
+        warn("Masploitz Backend did not initialize state")
+        return false
+    end
+
+    return true
 end
 
-print("✅ UI loaded successfully")
-print("🎯 Masploitz Anti-AFK fully loaded!")
+-- retry loop (infinite but safe)
+task.spawn(function()
+    local delayTime = 1
+
+    while true do
+        local success = loadBackend()
+        if success then
+            print("Masploitz Loader: Backend loaded")
+            break
+        end
+
+        task.wait(delayTime)
+        delayTime = math.min(delayTime * 1.5, 30)
+    end
+end)
