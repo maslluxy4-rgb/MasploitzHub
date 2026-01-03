@@ -31,6 +31,13 @@ getgenv().MasploitzState = {
 
 local state = getgenv().MasploitzState
 
+-- Create CFrame facing center (0,0,0)
+local function createCFrameFacingCenter(pos)
+    local center = Vector3.new(0, pos.Y, 0) -- Keep same Y level
+    local lookVector = (center - pos).Unit
+    return CFrame.new(pos, pos + lookVector)
+end
+
 -- Server Hop
 local function serverHop()
     local success = pcall(function()
@@ -163,9 +170,8 @@ local function findBestNearbySpot(crowdedPos, crowdedCF)
         local nearbyPositions = generateNearbyPositions(crowdedPos, radius, 8)
         
         for _, pos in pairs(nearbyPositions) do
-            -- Create CFrame facing the crowded spot
-            local lookAt = (crowdedPos - pos).Unit
-            local testCF = CFrame.new(pos, pos + lookAt)
+            -- Create CFrame facing the center (0,0,0)
+            local testCF = createCFrameFacingCenter(pos)
             
             -- Check if this position is clear (no one in front AND no one too close)
             if not isPlayerInFront(testCF) and not isPlayerBlocking(pos) then
@@ -203,7 +209,9 @@ local function findBestSpot(excludePos)
     local crowdedCF = nil
     
     -- First pass: find best clear spot AND most crowded spot
-    for _, spawnCF in pairs(cfg.SPAWN_POSITIONS) do
+    for _, spawnPos in pairs(cfg.SPAWN_POSITIONS) do
+        local spawnCF = createCFrameFacingCenter(spawnPos)
+        
         if not excludePos or (spawnCF.Position - excludePos).Magnitude > 5 then
             local playerCount = countPlayersNear(spawnCF.Position, cfg.PLAYER_RADIUS)
             local noFront = not isPlayerInFront(spawnCF)
@@ -582,6 +590,7 @@ P.CharacterAdded:Connect(function()
 end)
 
 -- Initial spawn
+-- Initial spawn
 spawn(function()
     repeat wait() until P.Character and P.Character:FindFirstChild("HumanoidRootPart")
     wait(1)
@@ -589,7 +598,8 @@ spawn(function()
     local bestSpot, playerCount, needsPath = findBestSpot(nil)
     
     if not bestSpot then
-        bestSpot = cfg.SPAWN_POSITIONS[math.random(1, #cfg.SPAWN_POSITIONS)]
+        local randomPos = cfg.SPAWN_POSITIONS[math.random(1, #cfg.SPAWN_POSITIONS)]
+        bestSpot = createCFrameFacingCenter(randomPos)
         playerCount = 0
         needsPath = false
     end
