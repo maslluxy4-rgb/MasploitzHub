@@ -33,8 +33,10 @@ getgenv().MasploitzConfig = {
     
     -- Position Settings
     PLAYER_RADIUS = 20,
-    FRONT_CHECK_ANGLE = 220,
-    FRONT_CHECK_DISTANCE = 10,
+    FRONT_CHECK_ANGLE = 45          -- Narrow cone in front
+    FRONT_CHECK_DISTANCE = 15       -- 15 studs ahead
+    BLOCK_CHECK_ANGLE = 360         -- Full circle
+    BLOCK_CHECK_DISTANCE = 10       -- 10 studs radius
     
     -- Server Hop Settings
     AUTO_HOP_TIME = 19 * 60, -- 19 minutes
