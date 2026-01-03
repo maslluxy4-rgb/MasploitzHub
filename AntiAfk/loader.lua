@@ -1,5 +1,7 @@
 -- Masploitz Anti-AFK Loader
--- Safe bootstrap + backend loader
+-- GitHub: https://github.com/maslluxy4-rgb/MasploitzHub/tree/main/AntiAfk
+
+local GITHUB_BASE = "https://raw.githubusercontent.com/maslluxy4-rgb/MasploitzHub/main/AntiAfk/"
 
 -- prevent double load
 if getgenv().__MASPLOITZ_LOADER_RUNNING then
@@ -8,69 +10,111 @@ if getgenv().__MASPLOITZ_LOADER_RUNNING then
 end
 getgenv().__MASPLOITZ_LOADER_RUNNING = true
 
--- config safety
-getgenv().MasploitzConfig = getgenv().MasploitzConfig or {}
-local cfg = getgenv().MasploitzConfig
+print("🔥 Loading Masploitz Anti-AFK System...")
 
-cfg.GAME_ID = cfg.GAME_ID or game.PlaceId
-cfg.CENTER_POSITION = cfg.CENTER_POSITION or Vector3.new(0, 0, 0)
+-- Shared config between backend and UI
+getgenv().MasploitzConfig = getgenv().MasploitzConfig or {
+    GAME_ID = 139217467707445,
+    MIN_PLAYERS = 20,
 
-cfg.PLAYER_RADIUS = cfg.PLAYER_RADIUS or 20
-cfg.FRONT_CHECK_DISTANCE = cfg.FRONT_CHECK_DISTANCE or 15
-cfg.FRONT_CHECK_ANGLE = cfg.FRONT_CHECK_ANGLE or 45
-cfg.BLOCK_CHECK_DISTANCE = cfg.BLOCK_CHECK_DISTANCE or 10
+    WALK_SPEED_NORMAL = 16,
+    WALK_SPEED_FAST = 28,
+    MAX_WALK_DISTANCE = 5,
+    MIN_WALK_DISTANCE = 1,
 
-cfg.DEBUG_MODE = cfg.DEBUG_MODE == true
+    MIN_JUMPS = 1,
+    MAX_JUMPS = 10,
+    JUMP_INTERVAL = 0.25,
 
--- backend url
-local BACKEND_URL =
-    "https://raw.githubusercontent.com/maslluxy4-rgb/MasploitzHub/main/AntiAfk/backend.lua"
+    RANDOM_MOVE_MIN = 1,
+    RANDOM_MOVE_MAX = 60,
+    REGULAR_MOVE_INTERVAL = 10,
+    MICRO_MOVE_MIN = 4,
+    MICRO_MOVE_MAX = 8,
+    SPOT_CHECK_INTERVAL = 1,
+    BLOCK_CHECK_INTERVAL = 1,
 
--- load backend safely
+    PLAYER_RADIUS = 20,
+    FRONT_CHECK_ANGLE = 45,
+    FRONT_CHECK_DISTANCE = 15,
+    BLOCK_CHECK_ANGLE = 360,
+    BLOCK_CHECK_DISTANCE = 10,
+
+    AUTO_HOP_TIME = 19 * 60,
+
+    AUTO_EQUIP_TOOL = "Sign",
+    TOOL_WAIT_TIMEOUT = 999999,
+
+    SPAWN_POSITIONS = {},
+
+    UI_POSITION = UDim2.new(0.5, -210, 0.5, -165),
+    UI_SIZE = UDim2.new(0, 420, 0, 330),
+    UI_BG_COLOR = Color3.fromRGB(15, 45, 65),
+    UI_ACCENT_COLOR = Color3.fromRGB(80, 150, 200),
+    UI_HEADER_COLOR = Color3.fromRGB(10, 35, 55),
+
+    ENABLE_CHAT_MESSAGES = false,
+    CHAT_INTERVAL_MIN = 120,
+    CHAT_INTERVAL_MAX = 300,
+    ENABLE_EMOTES = true,
+    EMOTE_INTERVAL_MIN = 60,
+    EMOTE_INTERVAL_MAX = 180,
+    ENABLE_CAMERA_MOVE = true,
+    CAMERA_INTERVAL_MIN = 30,
+    CAMERA_INTERVAL_MAX = 90,
+
+    CHAT_MESSAGES = { "afk", "brb", "back", "nice", "lol", "gg" },
+
+    DEBUG_MODE = true
+}
+
+-- loaders
 local function loadBackend()
-    local src
-
     local ok, err = pcall(function()
-        src = game:HttpGet(BACKEND_URL)
+        loadstring(game:HttpGet(GITHUB_BASE .. "backend.lua"))()
     end)
-    if not ok or type(src) ~= "string" or #src < 20 then
-        warn("Masploitz Loader: HttpGet failed")
-        return false
-    end
 
-    local fn
-    ok, err = pcall(function()
-        fn = loadstring(src)
-    end)
-    if not ok or type(fn) ~= "function" then
-        warn("Masploitz Loader: loadstring failed")
-        return false
-    end
-
-    ok, err = pcall(fn)
     if not ok then
-        warn("Masploitz Backend error:", err)
+        warn("❌ Backend error:", err)
         return false
     end
 
-    -- verify backend actually initialized
+    -- backend must expose state or it didn't really load
     if not getgenv().MasploitzState then
-        warn("Masploitz Backend did not initialize state")
+        warn("❌ Backend exited early (no state)")
         return false
     end
 
+    print("✅ Backend loaded successfully")
     return true
 end
 
--- retry loop (infinite but safe)
+local function loadUI()
+    local ok, err = pcall(function()
+        loadstring(game:HttpGet(GITHUB_BASE .. "ui.lua"))()
+    end)
+
+    if not ok then
+        warn("❌ UI error:", err)
+        return false
+    end
+
+    print("✅ UI loaded successfully")
+    return true
+end
+
+-- infinite retry loop (safe)
 task.spawn(function()
     local delayTime = 1
 
     while true do
-        local success = loadBackend()
-        if success then
-            print("Masploitz Loader: Backend loaded")
-            break
+        if loadBackend() then
+            task.wait(0.5)
+
+            if loadUI() then
+                print("🎯 Masploitz Anti-AFK fully loaded!")
+                break
+            end
         end
 
         task.wait(delayTime)
