@@ -217,8 +217,20 @@ function UI.init(backendModule)
     local distBox = c("TextBox", {Parent = distF, BackgroundColor3 = Color3.fromRGB(2, 6, 23), Size = UDim2.new(0, 60, 0, 32), Position = UDim2.new(1, -66, 0.5, -16), Text = "3", TextColor3 = Color3.fromRGB(229, 231, 235), Font = Enum.Font.GothamBold, TextSize = 14, BorderSizePixel = 0, ZIndex = 4, PlaceholderText = "3", TextXAlignment = Enum.TextXAlignment.Center})
     corner(distBox, 10) stroke(distBox, Color3.fromRGB(59, 130, 246), 1, 0.25)
     
+    -- Exclude Own Team Toggle
+    local excludeF = c("Frame", {Parent = setContent, BackgroundColor3 = Color3.fromRGB(2, 6, 23), Size = UDim2.new(1, 0, 0, 65), Position = UDim2.new(0, 0, 0, 150), BorderSizePixel = 0, ZIndex = 3})
+    corner(excludeF, 12) stroke(excludeF, Color3.fromRGB(59, 130, 246), 1, 0.2)
+    c("TextLabel", {Parent = excludeF, BackgroundTransparency = 1, Size = UDim2.new(0.6, 0, 0, 22), Position = UDim2.new(0, 14, 0, 10), Text = "Hide Own Team", TextColor3 = Color3.fromRGB(229, 231, 235), Font = Enum.Font.GothamBold, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 4})
+    c("TextLabel", {Parent = excludeF, BackgroundTransparency = 1, Size = UDim2.new(0.85, 0, 0, 25), Position = UDim2.new(0, 14, 0, 34), Text = "Don't show your current team in the list", TextColor3 = Color3.fromRGB(139, 147, 167), Font = Enum.Font.Gotham, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, ZIndex = 4})
+    
+    local excludeToggleF = c("Frame", {Parent = excludeF, BackgroundColor3 = Color3.fromRGB(248, 113, 113), Size = UDim2.new(0, 52, 0, 28), Position = UDim2.new(1, -58, 0.5, -14), BorderSizePixel = 0, ZIndex = 4})
+    corner(excludeToggleF, 14) stroke(excludeToggleF, Color3.fromRGB(248, 113, 113), 1, 0.3)
+    local excludeCircle = c("Frame", {Parent = excludeToggleF, BackgroundColor3 = Color3.fromRGB(224, 231, 255), Size = UDim2.new(0, 22, 0, 22), Position = UDim2.new(0, 3, 0.5, -11), BorderSizePixel = 0, ZIndex = 5})
+    corner(excludeCircle, 11)
+    local excludeToggleBtn = c("TextButton", {Parent = excludeToggleF, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Text = "", ZIndex = 6})
+    
     -- Info
-    local infoF = c("Frame", {Parent = setContent, BackgroundColor3 = Color3.fromRGB(6, 78, 59), BackgroundTransparency = 0.65, Size = UDim2.new(1, 0, 0, 85), Position = UDim2.new(0, 0, 0, 150), BorderSizePixel = 0, ZIndex = 3})
+    local infoF = c("Frame", {Parent = setContent, BackgroundColor3 = Color3.fromRGB(6, 78, 59), BackgroundTransparency = 0.65, Size = UDim2.new(1, 0, 0, 85), Position = UDim2.new(0, 0, 0, 225), BorderSizePixel = 0, ZIndex = 3})
     corner(infoF, 12) stroke(infoF, Color3.fromRGB(52, 211, 153), 1, 0.35)
     c("TextLabel", {Parent = infoF, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, -14), Position = UDim2.new(0, 10, 0, 7), Text = "💡 Tip: Lower distances keep you closer to the target. Higher distances give you more space. You'll always face the same direction as your target!", TextColor3 = Color3.fromRGB(229, 231, 235), Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 4})
     
@@ -292,6 +304,18 @@ function UI.init(backendModule)
             tween(toggleF, 0.3, {BackgroundColor3 = Color3.fromRGB(248, 113, 113)})
             tween(toggleCircle, 0.3, {Position = UDim2.new(0, 3, 0.5, -11)})
         end
+    end)
+    
+    excludeToggleBtn.MouseButton1Click:Connect(function()
+        backend.settings.excludeOwnTeam = not backend.settings.excludeOwnTeam
+        if backend.settings.excludeOwnTeam then
+            tween(excludeToggleF, 0.3, {BackgroundColor3 = Color3.fromRGB(52, 211, 153)})
+            tween(excludeCircle, 0.3, {Position = UDim2.new(0, 27, 0.5, -11)})
+        else
+            tween(excludeToggleF, 0.3, {BackgroundColor3 = Color3.fromRGB(248, 113, 113)})
+            tween(excludeCircle, 0.3, {Position = UDim2.new(0, 3, 0.5, -11)})
+        end
+        updateTeams() -- Refresh team list immediately
     end)
     
     distBox.FocusLost:Connect(function()
