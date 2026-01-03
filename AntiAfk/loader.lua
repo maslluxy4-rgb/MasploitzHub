@@ -38,13 +38,12 @@ getgenv().MasploitzConfig = {
     
     -- Server Hop Settings
     AUTO_HOP_TIME = 19 * 60, -- 19 minutes
-    
-    -- Tool Settings
+
     AUTO_EQUIP_TOOL = "Sign",
     TOOL_WAIT_TIMEOUT = 999999,
-    
-    -- Spawn Positions
-    -- Spawn Positions (just coordinates, will face center)
+    AUTO_RE_EQUIP = true,           -- Auto re-equip tool periodically
+    RE_EQUIP_INTERVAL = 120,        -- Re-equip every 5 minutes (300 seconds)
+
     SPAWN_POSITIONS = {
         Vector3.new(-3.06, 6.54, -48.03),
         Vector3.new(12.67, 6.74, -46.14),
