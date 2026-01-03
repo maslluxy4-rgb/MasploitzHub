@@ -544,7 +544,7 @@ end
 
 -- Add elements to tabs
 function UIModule:AddToggle(tab, name, description, defaultValue, callback)
-    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 65), name)
+    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(0.8, 0, 0, 65), name)
     
     if description then
         local desc = self:CreateLabel(section, UDim2.new(0, 14, 0, 34), UDim2.new(0.85, 0, 0, 25), description, 11, false)
@@ -564,7 +564,7 @@ function UIModule:AddToggle(tab, name, description, defaultValue, callback)
 end
 
 function UIModule:AddNumberInput(tab, name, description, defaultValue, min, max, callback)
-    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 65), name)
+    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(0.8, 0, 0, 65), name)
     
     if description then
         local desc = self:CreateLabel(section, UDim2.new(0, 14, 0, 34), UDim2.new(0.7, 0, 0, 25), description, 11, false)
@@ -584,7 +584,7 @@ function UIModule:AddNumberInput(tab, name, description, defaultValue, min, max,
 end
 
 function UIModule:AddTextInput(tab, name, description, defaultValue, callback)
-    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 65), name)
+    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(0.8, 0, 0, 65), name)
     
     if description then
         local desc = self:CreateLabel(section, UDim2.new(0, 14, 0, 34), UDim2.new(0.55, 0, 0, 25), description, 11, false)
@@ -604,7 +604,7 @@ function UIModule:AddTextInput(tab, name, description, defaultValue, callback)
 end
 
 function UIModule:AddSlider(tab, name, description, min, max, defaultValue, increment, callback)
-    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 80), name)
+    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(0.8, 0, 0, 80), name)
     
     if description then
         local desc = self:CreateLabel(section, UDim2.new(0, 14, 0, 34), UDim2.new(0.9, 0, 0, 20), description, 11, false)
@@ -629,7 +629,7 @@ function UIModule:AddSlider(tab, name, description, min, max, defaultValue, incr
 end
 
 function UIModule:AddButton(tab, name, description, callback)
-    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 65), nil)
+    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(0.8, 0, 0, 65), nil)
     
     self:CreateLabel(section, UDim2.new(0, 14, 0, 10), UDim2.new(0.5, 0, 0, 22), name, 14, true)
     
@@ -661,7 +661,7 @@ end
 
 -- Create status display
 function UIModule:CreateStatusDisplay(tab)
-    local statusSection = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 50), nil)
+    local statusSection = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(0.8, 0, 0, 50), nil)
     
     self.StatusDot = create("Frame", {
         Parent = statusSection,
@@ -682,7 +682,7 @@ end
 
 -- Create control buttons (Stop/Return)
 function UIModule:CreateControlButtons(tab, stopCallback, returnCallback)
-    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 48), nil)
+    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(0.8, 0, 0, 48), nil)
     
     local stopBtn = self:CreateButton(section, UDim2.new(0, 5, 0.5, -16), UDim2.new(0.48, -7, 0, 32), "Stop", 14)
     stopBtn.BackgroundColor3 = Color3.fromRGB(127, 29, 29)
@@ -705,7 +705,7 @@ end
 
 -- Create team header
 function UIModule:CreateTeamHeader(tab)
-    local header = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 32), nil)
+    local header = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(0.8, 0, 0, 32), nil)
     self:CreateLabel(header, UDim2.new(0, 12, 0.5, -10), UDim2.new(0.5, 0, 0, 20), "Available Teams", 13, true)
     
     tab.Content.CanvasSize = UDim2.new(0, 0, 0, tab.Content.UIListLayout.AbsoluteContentSize.Y)
@@ -715,7 +715,7 @@ end
 
 -- Create team button
 function UIModule:CreateTeamButton(tab, teamColor, teamCount, teamColorValue, clickCallback)
-    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 50), nil)
+    local section = self:CreateSection(tab.Content, UDim2.new(0, 0, 0, 0), UDim2.new(0.8, 0, 0, 50), nil)
     
     -- Color box
     local colorBox = Instance.new("Frame", section)
