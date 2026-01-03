@@ -91,7 +91,7 @@ local function countPlayersNear(pos, radius)
     return count
 end
 
--- Check if player in front
+-- Check if player in front (45 degree cone, 15 studs)
 local function isPlayerInFront(cf)
     local lookVector = cf.LookVector
     
@@ -104,8 +104,29 @@ local function isPlayerInFront(cf)
             if dist <= cfg.FRONT_CHECK_DISTANCE then
                 local angle = math.acos(clamp(lookVector:Dot(dirToTarget), -1, 1))
                 if math.deg(angle) <= cfg.FRONT_CHECK_ANGLE then
+                    if cfg.DEBUG_MODE then
+                        print("⚠️ Player in front detected:", player.Name, "at", math.floor(dist), "studs,", math.floor(math.deg(angle)), "degrees")
+                    end
                     return true
                 end
+            end
+        end
+    end
+    return false
+end
+
+-- Check if player blocking (360 degrees, 10 studs - anyone too close)
+local function isPlayerBlocking(pos)
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= P and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local targetPos = player.Character.HumanoidRootPart.Position
+            local dist = (targetPos - pos).Magnitude
+            
+            if dist <= cfg.BLOCK_CHECK_DISTANCE then
+                if cfg.DEBUG_MODE then
+                    print("🔴 Player too close detected:", player.Name, "at", math.floor(dist), "studs")
+                end
+                return true
             end
         end
     end
@@ -146,8 +167,8 @@ local function findBestNearbySpot(crowdedPos, crowdedCF)
             local lookAt = (crowdedPos - pos).Unit
             local testCF = CFrame.new(pos, pos + lookAt)
             
-            -- Check if this position is clear and has good player count
-            if not isPlayerInFront(testCF) then
+            -- Check if this position is clear (no one in front AND no one too close)
+            if not isPlayerInFront(testCF) and not isPlayerBlocking(pos) then
                 local playerCount = countPlayersNear(pos, cfg.PLAYER_RADIUS)
                 if playerCount > maxPlayers then
                     maxPlayers = playerCount
@@ -185,7 +206,9 @@ local function findBestSpot(excludePos)
     for _, spawnCF in pairs(cfg.SPAWN_POSITIONS) do
         if not excludePos or (spawnCF.Position - excludePos).Magnitude > 5 then
             local playerCount = countPlayersNear(spawnCF.Position, cfg.PLAYER_RADIUS)
-            local isClear = not isPlayerInFront(spawnCF)
+            local noFront = not isPlayerInFront(spawnCF)
+            local noBlock = not isPlayerBlocking(spawnCF.Position)
+            local isClear = noFront and noBlock
             
             -- Track best clear spot
             if isClear and playerCount > maxClearPlayers then
@@ -323,12 +346,17 @@ local function relocate()
     local root = c.HumanoidRootPart
     local hum = c.Humanoid
     
-    -- Check blocking
-    if isPlayerInFront(root.CFrame) then
+    -- Check if someone is in front (45 degree cone, 15 studs)
+    local frontBlocked = isPlayerInFront(root.CFrame)
+    -- Check if someone is too close (360 degrees, 10 studs)
+    local tooClose = isPlayerBlocking(root.Position)
+    
+    if frontBlocked or tooClose then
         state.relocating = true
         
         if getgenv().MasploitzUI then
-            getgenv().MasploitzUI.updateStatus("Player blocking! Finding new spot...", Color3.fromRGB(255, 150, 50))
+            local msg = frontBlocked and "Player in front! Finding new spot..." or "Player too close! Relocating..."
+            getgenv().MasploitzUI.updateStatus(msg, Color3.fromRGB(255, 150, 50))
         end
         
         local bestSpot, bestCount, needsPath = findBestSpot(root.Position)
@@ -502,7 +530,19 @@ spawn(function() while wait(math.random(cfg.MICRO_MOVE_MIN, cfg.MICRO_MOVE_MAX))
 
 -- Spot checks
 spawn(function() while wait(cfg.SPOT_CHECK_INTERVAL) do if state.enabled and not state.relocating and not state.moving then relocate() end end end)
-spawn(function() while wait(cfg.BLOCK_CHECK_INTERVAL) do if state.enabled and not state.relocating and not state.moving then local c = P.Character if c and c:FindFirstChild("HumanoidRootPart") then if isPlayerInFront(c.HumanoidRootPart.CFrame) then relocate() end end end end end)
+spawn(function() 
+    while wait(cfg.BLOCK_CHECK_INTERVAL) do 
+        if state.enabled and not state.relocating and not state.moving then 
+            local c = P.Character 
+            if c and c:FindFirstChild("HumanoidRootPart") then 
+                -- Check both front blocking and proximity blocking
+                if isPlayerInFront(c.HumanoidRootPart.CFrame) or isPlayerBlocking(c.HumanoidRootPart.Position) then 
+                    relocate() 
+                end 
+            end 
+        end 
+    end 
+end)
 
 -- NEW: Anti-detection features
 spawn(function() while wait(10) do if state.enabled then sendChat() playEmote() moveCamera() end end end)
