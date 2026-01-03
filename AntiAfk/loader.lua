@@ -26,7 +26,7 @@ getgenv().MasploitzConfig = {
     REGULAR_MOVE_INTERVAL = 10,
     MICRO_MOVE_MIN = 4,
     MICRO_MOVE_MAX = 8,
-    SPOT_CHECK_INTERVAL = 1,
+    SPOT_CHECK_INTERVAL = 60,
     BLOCK_CHECK_INTERVAL = 1,
     
     -- Position Settings
