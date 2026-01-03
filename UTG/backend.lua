@@ -6,7 +6,7 @@ local RunService = game:GetService("RunService")
 local LP = Players.LocalPlayer
 
 local Backend = {}
-Backend.settings = {autoReturn = true, distance = 3, excludeOwnTeam = false}
+Backend.settings = {autoReturn = true, distance = 3, excludeOwnTeam = false, stopOnTeamJoin = true}
 Backend.state = {
     tpOn = false,
     selTeam = nil,
@@ -68,13 +68,27 @@ end
 -- Get all teams
 function Backend.getTeams()
     local teams = {}
+    local playerTeam = nil
+    
+    -- Get player's current team
+    if LP.Character then
+        local playerTorso = LP.Character:FindFirstChild("Torso") or LP.Character:FindFirstChild("UpperTorso")
+        if playerTorso then
+            playerTeam = playerTorso.BrickColor.Name
+        end
+    end
+    
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LP and player.Character then
             local torso = player.Character:FindFirstChild("Torso") or player.Character:FindFirstChild("UpperTorso")
             if torso then
                 local color = torso.BrickColor.Name
-                teams[color] = teams[color] or {Count = 0, Color = torso.BrickColor.Color}
-                teams[color].Count = teams[color].Count + 1
+                
+                -- Skip player's own team if excludeOwnTeam is enabled
+                if not (Backend.settings.excludeOwnTeam and color == playerTeam) then
+                    teams[color] = teams[color] or {Count = 0, Color = torso.BrickColor.Color}
+                    teams[color].Count = teams[color].Count + 1
+                end
             end
         end
     end
