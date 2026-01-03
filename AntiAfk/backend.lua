@@ -159,11 +159,15 @@ local function getAllPlayerPositions()
     return positions
 end
 
--- Create CFrame facing center (0,0,0)
 local function createCFrameFacingCenter(position)
+    if not position or not cfg.CENTER_POSITION then
+        return CFrame.new(0, 0, 0)
+    end
+
     local lookAt = (cfg.CENTER_POSITION - position).Unit
     return CFrame.new(position, position + lookAt)
 end
+
 
 -- Scan area dynamically for best positions
 local function scanForBestPositions()
