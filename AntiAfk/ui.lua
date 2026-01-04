@@ -335,6 +335,7 @@ createSetting("Debug Mode", "DEBUG_MODE", "toggle")
 createSetting("Walk Speed Normal", "WALK_SPEED_NORMAL", "number", 10, 30)
 createSetting("Walk Speed Fast", "WALK_SPEED_FAST", "number", 20, 40)
 createSetting("Max Walk Distance", "MAX_WALK_DISTANCE", "number", 1, 10)
+createSetting("Min Safe Distance", "MIN_SAFE_DISTANCE", "number", 3, 10)
 createSetting("Min Players (Server)", "MIN_PLAYERS", "number", 10, 30)
 createSetting("Re-Equip Interval (s)", "RE_EQUIP_INTERVAL", "number", 30, 300)
 
