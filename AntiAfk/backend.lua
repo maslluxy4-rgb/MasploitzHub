@@ -2,10 +2,10 @@
 -- Handles all anti-AFK logic and automation
 
 -- Check game ID
-if game.GameId ~= getgenv().MasploitzConfig.GAME_ID then
+--[[if game.GameId ~= getgenv().MasploitzConfig.GAME_ID then
     warn("Masploitz Anti-AFK: Wrong game!")
     return
-end
+end]]
 
 local cfg = getgenv().MasploitzConfig
 local TS = game:GetService("TweenService")
