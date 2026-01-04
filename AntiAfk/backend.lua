@@ -127,6 +127,25 @@ local function isPlayerBlocking(pos)
     return false
 end
 
+-- Check if any player is within minimum safe distance
+local function hasPlayerTooClose(pos, minDist)
+    minDist = minDist or cfg.MIN_SAFE_DISTANCE or 5 -- Use config or default 5 studs
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= P and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local targetPos = player.Character.HumanoidRootPart.Position
+            local dist = (targetPos - pos).Magnitude
+            
+            if dist < minDist then
+                if cfg.DEBUG_MODE then
+                    print("⛔ Player TOO close (under", minDist, "studs):", player.Name, "at", math.floor(dist), "studs")
+                end
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- Generate positions around a point in a circle
 local function generateNearbyPositions(center, radius, count)
     local positions = {}
