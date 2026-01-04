@@ -733,3 +733,4 @@ getgenv().MasploitzFunctions = {
         return state.enabled
     end,
     reEquipTool = reEquipTool  -- Expose for manual re-equip from UI if needed
+}
