@@ -58,12 +58,6 @@ getgenv().MasploitzConfig = {
     DEBUG_MODE = true
 }
 
--- Check game ID
-if tostring(game.GameId) ~= tostring(getgenv().MasploitzConfig.GAME_ID) then
-    warn("❌ Not the right game.")
-    return
-end
-
 -- Load Backend
 local backendSuccess, backendError = pcall(function()
     loadstring(game:HttpGet(GITHUB_BASE .. "backend.lua"))()
