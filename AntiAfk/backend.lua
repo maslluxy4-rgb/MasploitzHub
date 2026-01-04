@@ -2,7 +2,7 @@
 -- Handles all anti-AFK logic and automation
 
 -- Check game ID
-if game.PlaceId ~= getgenv().MasploitzConfig.GAME_ID then
+if game.GameId ~= getgenv().MasploitzConfig.GAME_ID then
     warn("Masploitz Anti-AFK: Wrong game!")
     return
 end
