@@ -1,63 +1,49 @@
 -- Masploitz Anti-AFK Loader
--- GitHub: https://github.com/maslluxy4-rgb/MasploitzHub/tree/main/AntiAfk
-
 local GITHUB_BASE = "https://raw.githubusercontent.com/maslluxy4-rgb/MasploitzHub/main/AntiAfk/"
-
 print("🔥 Loading Masploitz Anti-AFK System...")
-
--- Shared config between backend and UI
+-- Shared config
 getgenv().MasploitzConfig = {
-    -- Game Settings
     GAME_ID = 139217467707445,
     MIN_PLAYERS = 20,
-    
-    -- Movement Settings
     WALK_SPEED_NORMAL = 16,
     WALK_SPEED_FAST = 28,
     MAX_WALK_DISTANCE = 5,
     MIN_WALK_DISTANCE = 1,
-    
-    -- Jump Settings
     MIN_JUMPS = 1,
     MAX_JUMPS = 10,
     JUMP_INTERVAL = 0.25,
-    
-    -- Timing Settings
     RANDOM_MOVE_MIN = 1,
     RANDOM_MOVE_MAX = 60,
     REGULAR_MOVE_INTERVAL = 10,
     MICRO_MOVE_MIN = 4,
     MICRO_MOVE_MAX = 8,
-    SPOT_CHECK_INTERVAL = 1,
+    SPOT_CHECK_INTERVAL = 60,
     BLOCK_CHECK_INTERVAL = 1,
-    
-    -- Position Settings
     PLAYER_RADIUS = 20,
-    FRONT_CHECK_ANGLE = 45,          -- Narrow cone in front
-    FRONT_CHECK_DISTANCE = 15,       -- 15 studs ahead
-    BLOCK_CHECK_ANGLE = 360,         -- Full circle
-    BLOCK_CHECK_DISTANCE = 10,       -- 10 studs radius
-    
-    -- Server Hop Settings
-    AUTO_HOP_TIME = 19 * 60, -- 19 minutes
-    
-    -- Tool Settings
+    FRONT_CHECK_ANGLE = 45,
+    FRONT_CHECK_DISTANCE = 15,
+    BLOCK_CHECK_ANGLE = 360,
+    BLOCK_CHECK_DISTANCE = 10,
+    AUTO_HOP_TIME = 19 * 60,
     AUTO_EQUIP_TOOL = "Sign",
     TOOL_WAIT_TIMEOUT = 999999,
-    
-    -- Dynamic Position Finding
-    SEARCH_RADIUS = 100,            -- How far to search for spots
-    SEARCH_GRID_SIZE = 10,          -- Grid cell size for searching
-    CENTER_POSITION = Vector3.new(0, 0, 0), -- Face towards this point when idle
-    
-    -- UI Settings
+    AUTO_RE_EQUIP = true,
+    RE_EQUIP_INTERVAL = 120,
+    SPAWN_POSITIONS = {
+        Vector3.new(-3.06, 6.54, -48.03),
+        Vector3.new(12.67, 6.74, -46.14),
+        Vector3.new(37.71, 6.74, -36.19),
+        Vector3.new(-24.34, 6.74, -38.91),
+        Vector3.new(40.35, 6.74, -21.97),
+        Vector3.new(-15.39, 6.74, 46.85),
+        Vector3.new(23.11, 6.74, 47.31),
+        Vector3.new(42.23, 6.34, 30.49)
+    },
     UI_POSITION = UDim2.new(0.5, -210, 0.5, -165),
     UI_SIZE = UDim2.new(0, 420, 0, 330),
     UI_BG_COLOR = Color3.fromRGB(15, 45, 65),
     UI_ACCENT_COLOR = Color3.fromRGB(80, 150, 200),
     UI_HEADER_COLOR = Color3.fromRGB(10, 35, 55),
-    
-    -- Anti-Detection Settings
     ENABLE_CHAT_MESSAGES = false,
     CHAT_INTERVAL_MIN = 120,
     CHAT_INTERVAL_MAX = 300,
@@ -67,45 +53,26 @@ getgenv().MasploitzConfig = {
     ENABLE_CAMERA_MOVE = true,
     CAMERA_INTERVAL_MIN = 30,
     CAMERA_INTERVAL_MAX = 90,
-    
-    -- Chat Messages
-    CHAT_MESSAGES = {
-        "afk",
-        "brb",
-        "back",
-        "nice",
-        "lol",
-        "gg"
-    },
-    
-    -- Debug
+    CHAT_MESSAGES = {"afk","brb","back","nice","lol","gg"},
     DEBUG_MODE = true
 }
-
 -- Load Backend
 local backendSuccess, backendError = pcall(function()
     loadstring(game:HttpGet(GITHUB_BASE .. "backend.lua"))()
 end)
-
 if not backendSuccess then
     warn("❌ Failed to load backend:", backendError)
     return
 end
-
 print("✅ Backend loaded successfully")
-
--- Small delay
 wait(0.5)
-
 -- Load UI
 local uiSuccess, uiError = pcall(function()
     loadstring(game:HttpGet(GITHUB_BASE .. "ui.lua"))()
 end)
-
 if not uiSuccess then
     warn("❌ Failed to load UI:", uiError)
     return
 end
-
 print("✅ UI loaded successfully")
 print("🎯 Masploitz Anti-AFK fully loaded!")
