@@ -59,8 +59,8 @@ getgenv().MasploitzConfig = {
 }
 
 -- Check game ID
-if game.GameId ~= getgenv().MasploitzConfig.GAME_ID then
-    warn("❌ This Anti-AFK script does not support this game.")
+if tostring(game.GameId) ~= tostring(getgenv().MasploitzConfig.GAME_ID) then
+    warn("❌ Not the right game.")
     return
 end
 
