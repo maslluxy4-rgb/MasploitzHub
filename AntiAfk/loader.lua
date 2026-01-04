@@ -1,6 +1,7 @@
 -- Masploitz Anti-AFK Loader
 local GITHUB_BASE = "https://raw.githubusercontent.com/maslluxy4-rgb/MasploitzHub/main/AntiAfk/"
 print("🔥 Loading Masploitz Anti-AFK System...")
+
 -- Shared config
 getgenv().MasploitzConfig = {
     GAME_ID = 139217467707445,
@@ -56,23 +57,29 @@ getgenv().MasploitzConfig = {
     CHAT_MESSAGES = {"afk","brb","back","nice","lol","gg"},
     DEBUG_MODE = true
 }
+
 -- Load Backend
 local backendSuccess, backendError = pcall(function()
     loadstring(game:HttpGet(GITHUB_BASE .. "backend.lua"))()
 end)
+
 if not backendSuccess then
     warn("❌ Failed to load backend:", backendError)
     return
 end
+
 print("✅ Backend loaded successfully")
 wait(0.5)
+
 -- Load UI
 local uiSuccess, uiError = pcall(function()
     loadstring(game:HttpGet(GITHUB_BASE .. "ui.lua"))()
 end)
+
 if not uiSuccess then
     warn("❌ Failed to load UI:", uiError)
     return
 end
+
 print("✅ UI loaded successfully")
 print("🎯 Masploitz Anti-AFK fully loaded!")
