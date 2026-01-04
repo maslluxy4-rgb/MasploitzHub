@@ -1,22 +1,9 @@
--- Masploitz Anti-AFK Backend
--- Handles all anti-AFK logic and automation
-
--- Check game ID
---[[if game.GameId ~= getgenv().MasploitzConfig.GAME_ID then
-    warn("Masploitz Anti-AFK: Wrong game!")
-    return
-end]]
-
+-- Masploitz Anti-AFK Backend (Optimized)
 local cfg = getgenv().MasploitzConfig
 local TS = game:GetService("TweenService")
 local P = game:GetService("Players").LocalPlayer
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
-
--- Math clamp helper
-local function clamp(val, min, max)
-    return math.max(min, math.min(max, val))
-end
+local TPS = game:GetService("TeleportService")
+local HTTP = game:GetService("HttpService")
 
 -- State
 getgenv().MasploitzState = {
@@ -28,91 +15,113 @@ getgenv().MasploitzState = {
     lastEmote = tick(),
     lastCamera = tick()
 }
+local st = getgenv().MasploitzState
 
-local state = getgenv().MasploitzState
+-- R15 Tool None Animation Controller
+local toolAnim = nil
+local animTrack = nil
 
--- Create CFrame facing center (0,0,0)
-local function createCFrameFacingCenter(pos)
-    local center = Vector3.new(0, pos.Y, 0) -- Keep same Y level
-    local lookVector = (center - pos).Unit
-    return CFrame.new(pos, pos + lookVector)
+local function ensureToolAnim()
+    local c = P.Character
+    if not c then return end
+    
+    local hum = c:FindFirstChild("Humanoid")
+    if not hum or hum.RigType ~= Enum.HumanoidRigType.R15 then return end
+    
+    -- Check if animation is playing
+    if animTrack and animTrack.IsPlaying then return end
+    
+    -- Load R15 Tool None animation
+    pcall(function()
+        if not toolAnim then
+            toolAnim = Instance.new("Animation")
+            toolAnim.AnimationId = "rbxassetid://507768375" -- R15 Tool None
+        end
+        
+        animTrack = hum:LoadAnimation(toolAnim)
+        animTrack.Looped = true
+        animTrack:Play()
+        
+        if cfg.DEBUG_MODE then
+            print("🎬 Started R15 Tool None animation")
+        end
+    end)
+end
+
+-- Animation check loop
+spawn(function()
+    while task.wait() do
+        if st.enabled then
+            ensureToolAnim()
+        end
+    end
+end)
+
+-- Math helpers
+local function clamp(v, mn, mx) return math.max(mn, math.min(mx, v)) end
+local function faceCtr(p)
+    local c = Vector3.new(0, p.Y, 0)
+    local l = (c - p).Unit
+    return CFrame.new(p, p + l)
 end
 
 -- Server Hop
 local function serverHop()
-    local success = pcall(function()
-        local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
-        local server = nil
-        
-        for i, v in pairs(servers.data) do
+    pcall(function()
+        local s = HTTP:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+        local srv = nil
+        for i, v in pairs(s.data) do
             if v.id ~= game.JobId and v.playing >= cfg.MIN_PLAYERS and v.playing < v.maxPlayers - 1 then
-                server = v
-                break
+                srv = v break
             end
         end
-        
-        if server then
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, P)
-        else
-            TeleportService:Teleport(game.PlaceId, P)
-        end
+        if srv then TPS:TeleportToPlaceInstance(game.PlaceId, srv.id, P) else TPS:Teleport(game.PlaceId, P) end
     end)
-    
-    if not success then
-        TeleportService:Teleport(game.PlaceId, P)
-    end
+    TPS:Teleport(game.PlaceId, P)
 end
 
--- Check player count on join
+-- Check player count
 spawn(function()
     wait(5)
     if #game.Players:GetPlayers() < cfg.MIN_PLAYERS then
-        wait(2)
-        serverHop()
+        wait(2) serverHop()
     end
 end)
 
--- Auto Equip Tool
-local function equipTool()
-    local backpack = P:WaitForChild("Backpack", cfg.TOOL_WAIT_TIMEOUT)
-    local tool = backpack:WaitForChild(cfg.AUTO_EQUIP_TOOL, cfg.TOOL_WAIT_TIMEOUT)
-    
-    if tool then
-        P.Character:WaitForChild("Humanoid"):EquipTool(tool)
-        return true
-    end
+-- Equip
+local function eq()
+    local bp = P:WaitForChild("Backpack", cfg.TOOL_WAIT_TIMEOUT)
+    local t = bp:WaitForChild(cfg.AUTO_EQUIP_TOOL, cfg.TOOL_WAIT_TIMEOUT)
+    if t then P.Character:WaitForChild("Humanoid"):EquipTool(t) return true end
     return false
 end
 
--- Count players near position
-local function countPlayersNear(pos, radius)
-    local count = 0
-    for _, player in pairs(game.Players:GetPlayers()) do
-        if player ~= P and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local dist = (player.Character.HumanoidRootPart.Position - pos).Magnitude
-            if dist <= radius then
-                count = count + 1
-            end
+-- Count nearby
+local function cnt(p, r)
+    local n = 0
+    for _, pl in pairs(game.Players:GetPlayers()) do
+        if pl ~= P and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
+            if (pl.Character.HumanoidRootPart.Position - p).Magnitude <= r then n = n + 1 end
         end
     end
-    return count
+    return n
 end
 
--- Check if player in front (45 degree cone, 15 studs)
-local function isPlayerInFront(cf)
-    local lookVector = cf.LookVector
-    
-    for _, player in pairs(game.Players:GetPlayers()) do
-        if player ~= P and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local targetPos = player.Character.HumanoidRootPart.Position
-            local dirToTarget = (targetPos - cf.Position).Unit
-            local dist = (targetPos - cf.Position).Magnitude
-            
-            if dist <= cfg.FRONT_CHECK_DISTANCE then
-                local angle = math.acos(clamp(lookVector:Dot(dirToTarget), -1, 1))
-                if math.deg(angle) <= cfg.FRONT_CHECK_ANGLE then
+-- Check front (45 degree cone, only 180 degrees forward)
+local function chkFrt(cf)
+    local lv = cf.LookVector
+    for _, pl in pairs(game.Players:GetPlayers()) do
+        if pl ~= P and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
+            local tp = pl.Character.HumanoidRootPart.Position
+            local dt = (tp - cf.Position).Unit
+            local d = (tp - cf.Position).Magnitude
+            if d <= cfg.FRONT_CHECK_DISTANCE then
+                local a = math.acos(clamp(lv:Dot(dt), -1, 1))
+                local deg = math.deg(a)
+                -- Only check front 180 degrees (angle < 90 means in front)
+                if deg <= cfg.FRONT_CHECK_ANGLE and deg < 90 then
                     if cfg.DEBUG_MODE then
-                        print("⚠️ Player in front detected:", player.Name, "at", math.floor(dist), "studs,", math.floor(math.deg(angle)), "degrees")
+                        print("⚠️ Player in front:", pl.Name, math.floor(d), "studs", math.floor(deg), "deg")
                     end
                     return true
                 end
@@ -122,17 +131,12 @@ local function isPlayerInFront(cf)
     return false
 end
 
--- Check if player blocking (360 degrees, 10 studs - anyone too close)
-local function isPlayerBlocking(pos)
-    for _, player in pairs(game.Players:GetPlayers()) do
-        if player ~= P and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local targetPos = player.Character.HumanoidRootPart.Position
-            local dist = (targetPos - pos).Magnitude
-            
-            if dist <= cfg.BLOCK_CHECK_DISTANCE then
-                if cfg.DEBUG_MODE then
-                    print("🔴 Player too close detected:", player.Name, "at", math.floor(dist), "studs")
-                end
+-- Check blocking
+local function chkBlk(p)
+    for _, pl in pairs(game.Players:GetPlayers()) do
+        if pl ~= P and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
+            if (pl.Character.HumanoidRootPart.Position - p).Magnitude <= cfg.BLOCK_CHECK_DISTANCE then
+                if cfg.DEBUG_MODE then print("🔴 Player too close:", pl.Name) end
                 return true
             end
         end
@@ -140,504 +144,288 @@ local function isPlayerBlocking(pos)
     return false
 end
 
--- Generate positions around a point in a circle
-local function generateNearbyPositions(center, radius, count)
-    local positions = {}
-    for i = 1, count do
-        local angle = (math.pi * 2 / count) * i
-        local offset = Vector3.new(
-            math.cos(angle) * radius,
-            0,
-            math.sin(angle) * radius
-        )
-        table.insert(positions, center + offset)
+-- Generate positions (only forward 180 degrees)
+local function genPos(ctr, r, ct, curCF)
+    local ps = {}
+    local baseLook = curCF and curCF.LookVector or Vector3.new(0, 0, -1)
+    local baseAngle = math.atan2(baseLook.Z, baseLook.X)
+    
+    for i = 1, ct do
+        -- Only generate positions in front (±90 degrees from forward)
+        local offset = (i / ct) * math.pi - (math.pi / 2) -- -90 to +90 degrees
+        local ang = baseAngle + offset
+        local off = Vector3.new(math.cos(ang) * r, 0, math.sin(ang) * r)
+        table.insert(ps, ctr + off)
     end
-    return positions
+    return ps
 end
 
--- Find best nearby position around a crowded spot
-local function findBestNearbySpot(crowdedPos, crowdedCF)
-    local bestPos = nil
-    local maxPlayers = 0
-    local bestCF = nil
+-- Find nearby spot (only forward)
+local function fndNear(cp, ccf)
+    local bp, mp, bcf = nil, 0, nil
+    if cfg.DEBUG_MODE then print("🔍 Searching forward positions...") end
     
-    if cfg.DEBUG_MODE then
-        print("🔍 Searching for positions near crowded spot...")
-    end
-    
-    -- Try different distances from crowded spot
-    for radius = 5, 15, 5 do
-        local nearbyPositions = generateNearbyPositions(crowdedPos, radius, 8)
-        
-        for _, pos in pairs(nearbyPositions) do
-            -- Create CFrame facing the center (0,0,0)
-            local testCF = createCFrameFacingCenter(pos)
-            
-            -- Check if this position is clear (no one in front AND no one too close)
-            if not isPlayerInFront(testCF) and not isPlayerBlocking(pos) then
-                local playerCount = countPlayersNear(pos, cfg.PLAYER_RADIUS)
-                if playerCount > maxPlayers then
-                    maxPlayers = playerCount
-                    bestPos = pos
-                    bestCF = testCF
-                    
-                    if cfg.DEBUG_MODE then
-                        print("  ✅ Found spot at", radius, "studs with", playerCount, "players")
-                    end
+    for r = 5, 15, 5 do
+        local nps = genPos(cp, r, 8, ccf)
+        for _, p in pairs(nps) do
+            local tcf = faceCtr(p)
+            if not chkFrt(tcf) and not chkBlk(p) then
+                local pc = cnt(p, cfg.PLAYER_RADIUS)
+                if pc > mp then
+                    mp = pc bp = p bcf = tcf
+                    if cfg.DEBUG_MODE then print("  ✅ Forward spot:", r, "studs,", pc, "players") end
                 end
             end
         end
-        
-        -- If we found a good spot, use it
-        if bestPos and maxPlayers > 5 then
-            if cfg.DEBUG_MODE then
-                print("  ✨ Selected best nearby spot with", maxPlayers, "players")
-            end
-            break
+        if bp and mp > 5 then break end
+    end
+    return bcf, mp
+end
+
+-- Find best spot (forward only when relocating)
+local function fndBst(ex, curCF)
+    local bcs, mcp, crs, mcrp, crcf = nil, 0, nil, 0, nil
+    
+    for _, sp in pairs(cfg.SPAWN_POSITIONS) do
+        local scf = faceCtr(sp)
+        if not ex or (scf.Position - ex).Magnitude > 5 then
+            local pc = cnt(scf.Position, cfg.PLAYER_RADIUS)
+            local nf = not chkFrt(scf)
+            local nb = not chkBlk(scf.Position)
+            if nf and nb and pc > mcp then mcp = pc bcs = scf end
+            if pc > mcrp then mcrp = pc crs = scf.Position crcf = scf end
         end
     end
     
-    return bestCF, maxPlayers
-end
-
--- Find best spawn with smart crowded spot handling
-local function findBestSpot(excludePos)
-    local bestClearSpot = nil
-    local maxClearPlayers = 0
-    local crowdedSpot = nil
-    local maxCrowdedPlayers = 0
-    local crowdedCF = nil
-    
-    -- First pass: find best clear spot AND most crowded spot
-    for _, spawnPos in pairs(cfg.SPAWN_POSITIONS) do
-        local spawnCF = createCFrameFacingCenter(spawnPos)
-        
-        if not excludePos or (spawnCF.Position - excludePos).Magnitude > 5 then
-            local playerCount = countPlayersNear(spawnCF.Position, cfg.PLAYER_RADIUS)
-            local noFront = not isPlayerInFront(spawnCF)
-            local noBlock = not isPlayerBlocking(spawnCF.Position)
-            local isClear = noFront and noBlock
-            
-            -- Track best clear spot
-            if isClear and playerCount > maxClearPlayers then
-                maxClearPlayers = playerCount
-                bestClearSpot = spawnCF
-            end
-            
-            -- Track most crowded spot (even if blocked)
-            if playerCount > maxCrowdedPlayers then
-                maxCrowdedPlayers = playerCount
-                crowdedSpot = spawnCF.Position
-                crowdedCF = spawnCF
-            end
+    if crs and mcrp > mcp + 10 then
+        if cfg.DEBUG_MODE then print("🔍 Crowded:", mcrp, "vs clear:", mcp) end
+        local ns, nc = fndNear(crs, curCF or crcf)
+        if ns and nc > mcp then
+            if cfg.DEBUG_MODE then print("✅ Forward spot:", nc, "players") end
+            return ns, nc, true
         end
     end
-    
-    -- If crowded spot has significantly more players (like 20 vs 3-5)
-    if crowdedSpot and maxCrowdedPlayers > maxClearPlayers + 10 then
-        if cfg.DEBUG_MODE then
-            print("🔍 Found crowded spot with", maxCrowdedPlayers, "players vs best clear", maxClearPlayers)
-        end
-        
-        -- Try to find a nearby position around the crowded spot
-        local nearbySpot, nearbyCount = findBestNearbySpot(crowdedSpot, crowdedCF)
-        
-        if nearbySpot and nearbyCount > maxClearPlayers then
-            if cfg.DEBUG_MODE then
-                print("✅ Found nearby spot with", nearbyCount, "players - using pathfinding!")
-            end
-            return nearbySpot, nearbyCount, true -- true = needs pathfinding
-        end
-    end
-    
-    return bestClearSpot, maxClearPlayers, false
+    return bcs, mcp, false
 end
 
--- Check position validity
-local function checkPos(root, target)
-    return (root.Position - target.Position).Magnitude < 1
-end
+-- Position check
+local function chkPs(rt, tg) return (rt.Position - tg.Position).Magnitude < 1 end
 
--- Kill character
-local function killChar()
+-- Kill
+local function kll()
     if P.Character and P.Character:FindFirstChild("Humanoid") then
         P.Character.Humanoid.Health = 0
     end
 end
 
--- Main movement function
-local function move()
-    if not state.enabled or state.moving or state.relocating then return end
-    state.moving = true
-    
+-- Move
+local function mv()
+    if not st.enabled or st.moving or st.relocating then return end
+    st.moving = true
     pcall(function()
-        local c = P.Character
-        if not c then return end
-        local hum = c:FindFirstChild("Humanoid")
-        local root = c:FindFirstChild("HumanoidRootPart")
-        if not hum or not root or hum.Health <= 0 then state.moving = false return end
+        local c = P.Character if not c then return end
+        local h = c:FindFirstChild("Humanoid")
+        local rt = c:FindFirstChild("HumanoidRootPart")
+        if not h or not rt or h.Health <= 0 then st.moving = false return end
         
-        local orig = state.savedPos or root.CFrame
-        if not orig then state.moving = false return end
+        local og = st.savedPos or rt.CFrame
+        if not og then st.moving = false return end
+        if getgenv().MasploitzUI then getgenv().MasploitzUI.updateStatus("Moving...", Color3.fromRGB(100, 150, 255)) end
         
-        if getgenv().MasploitzUI then
-            getgenv().MasploitzUI.updateStatus("Moving...", Color3.fromRGB(100, 150, 255))
-        end
-        
-        -- Jumps
         local jc = math.random(cfg.MIN_JUMPS, cfg.MAX_JUMPS)
-        for i = 1, jc do
-            hum.Jump = true
-            wait(cfg.JUMP_INTERVAL)
-        end
-        
+        for i = 1, jc do h.Jump = true wait(cfg.JUMP_INTERVAL) end
         wait(0.1)
         
-        -- Walk out
-        local ang = math.rad(math.random(0, 360))
-        local dist = math.random(cfg.MIN_WALK_DISTANCE, cfg.MAX_WALK_DISTANCE)
-        local dir = Vector3.new(math.cos(ang), 0, math.sin(ang))
-        local tpos = orig.Position + (dir * dist)
+        local a = math.rad(math.random(0, 360))
+        local d = math.random(cfg.MIN_WALK_DISTANCE, cfg.MAX_WALK_DISTANCE)
+        local dr = Vector3.new(math.cos(a), 0, math.sin(a))
+        local tp = og.Position + (dr * d)
+        h.WalkSpeed = cfg.WALK_SPEED_NORMAL h:MoveTo(tp)
+        wait(d / cfg.WALK_SPEED_NORMAL + 0.3)
         
-        hum.WalkSpeed = cfg.WALK_SPEED_NORMAL
-        hum:MoveTo(tpos)
-        
-        wait(dist / cfg.WALK_SPEED_NORMAL + 0.3)
-        
-        -- Walk back fast
-        hum.WalkSpeed = cfg.WALK_SPEED_FAST
-        hum:MoveTo(orig.Position)
-        
-        wait((dist / cfg.WALK_SPEED_FAST) + 0.2)
-        
-        -- Wait before rotation
+        h.WalkSpeed = cfg.WALK_SPEED_FAST h:MoveTo(og.Position)
+        wait((d / cfg.WALK_SPEED_FAST) + 0.2)
         wait(math.random(10, 30) / 10)
         
-        -- Smooth rotation
-        hum:ChangeState(Enum.HumanoidStateType.Physics)
+        h:ChangeState(Enum.HumanoidStateType.Physics)
+        local tw = TS:Create(rt, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = og})
+        tw:Play() tw.Completed:Wait() wait(0.1)
         
-        local tw = TS:Create(root, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = orig})
-        tw:Play()
-        tw.Completed:Wait()
-        
-        wait(0.1)
-        
-        -- Verify position
-        if not checkPos(root, orig) then
-            if getgenv().MasploitzUI then
-                getgenv().MasploitzUI.updateStatus("Position lost! Resetting...", Color3.fromRGB(255, 100, 100))
-            end
-            wait(0.5)
-            killChar()
-            state.moving = false
-            return
+        if not chkPs(rt, og) then
+            if getgenv().MasploitzUI then getgenv().MasploitzUI.updateStatus("Position lost!", Color3.fromRGB(255, 100, 100)) end
+            wait(0.5) kll() st.moving = false return
         end
         
-        hum:ChangeState(Enum.HumanoidStateType.Running)
-        hum.WalkSpeed = cfg.WALK_SPEED_NORMAL
-        
-        if getgenv().MasploitzUI then
-            getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
-        end
+        h:ChangeState(Enum.HumanoidStateType.Running)
+        h.WalkSpeed = cfg.WALK_SPEED_NORMAL
+        if getgenv().MasploitzUI then getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100)) end
     end)
-    
-    state.moving = false
+    st.moving = false
 end
 
--- Relocate to better spot
-local function relocate()
-    if state.relocating or state.moving then return end
-    
+-- Relocate (forward only)
+local function rlc()
+    if st.relocating or st.moving then return end
     local c = P.Character
     if not c or not c:FindFirstChild("HumanoidRootPart") or not c:FindFirstChild("Humanoid") then return end
     
-    local root = c.HumanoidRootPart
-    local hum = c.Humanoid
+    local rt = c.HumanoidRootPart
+    local h = c.Humanoid
+    local fb = chkFrt(rt.CFrame)
+    local tc = chkBlk(rt.Position)
     
-    -- Check if someone is in front (45 degree cone, 15 studs)
-    local frontBlocked = isPlayerInFront(root.CFrame)
-    -- Check if someone is too close (360 degrees, 10 studs)
-    local tooClose = isPlayerBlocking(root.Position)
-    
-    if frontBlocked or tooClose then
-        state.relocating = true
-        
+    if fb or tc then
+        st.relocating = true
         if getgenv().MasploitzUI then
-            local msg = frontBlocked and "Player in front! Finding new spot..." or "Player too close! Relocating..."
-            getgenv().MasploitzUI.updateStatus(msg, Color3.fromRGB(255, 150, 50))
+            getgenv().MasploitzUI.updateStatus(fb and "Player in front! Moving forward..." or "Player too close!", Color3.fromRGB(255, 150, 50))
         end
         
-        local bestSpot, bestCount, needsPath = findBestSpot(root.Position)
-        
-        if bestSpot then
-            local PathfindingService = game:GetService("PathfindingService")
-            local path = PathfindingService:CreatePath()
+        local bs, bc, np = fndBst(rt.Position, rt.CFrame)
+        if bs then
+            local PFS = game:GetService("PathfindingService")
+            local pth = PFS:CreatePath()
+            local ok = pcall(function() pth:ComputeAsync(rt.Position, bs.Position) end)
             
-            local success = pcall(function()
-                path:ComputeAsync(root.Position, bestSpot.Position)
-            end)
-            
-            if success and path.Status == Enum.PathStatus.Success then
-                local waypoints = path:GetWaypoints()
-                
-                for _, waypoint in pairs(waypoints) do
-                    if waypoint.Action == Enum.PathWaypointAction.Jump then
-                        hum.Jump = true
-                    end
-                    hum:MoveTo(waypoint.Position)
-                    hum.MoveToFinished:Wait()
+            if ok and pth.Status == Enum.PathStatus.Success then
+                for _, wp in pairs(pth:GetWaypoints()) do
+                    if wp.Action == Enum.PathWaypointAction.Jump then h.Jump = true end
+                    h:MoveTo(wp.Position) h.MoveToFinished:Wait()
                 end
-            else
-                hum:MoveTo(bestSpot.Position)
-                wait(3)
-            end
+            else h:MoveTo(bs.Position) wait(3) end
             
-            root.CFrame = bestSpot
-            state.savedPos = bestSpot
-            
+            rt.CFrame = bs st.savedPos = bs
             if getgenv().MasploitzUI then
-                if needsPath then
-                    getgenv().MasploitzUI.updateStatus("Found crowded area! (" .. bestCount .. " players)", Color3.fromRGB(100, 200, 255))
-                else
-                    getgenv().MasploitzUI.updateStatus("Moved to clear spot!", Color3.fromRGB(100, 200, 255))
-                end
+                getgenv().MasploitzUI.updateStatus(np and "Found crowded area! (" .. bc .. ")" or "Moved forward!", Color3.fromRGB(100, 200, 255))
             end
             wait(2)
-            if getgenv().MasploitzUI then
-                getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
-            end
+            if getgenv().MasploitzUI then getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100)) end
         end
-        
-        state.relocating = false
-        return
+        st.relocating = false return
     end
     
-    -- Check for better spots (including crowded ones)
-    local currentCount = countPlayersNear(root.Position, cfg.PLAYER_RADIUS)
-    local bestSpot, bestCount, needsPath = findBestSpot(root.Position)
+    local cc = cnt(rt.Position, cfg.PLAYER_RADIUS)
+    local bs, bc, np = fndBst(rt.Position, rt.CFrame)
     
-    if bestSpot and bestCount > currentCount + 2 then
-        state.relocating = true
-        
+    if bs and bc > cc + 2 then
+        st.relocating = true
         if getgenv().MasploitzUI then
-            if needsPath then
-                getgenv().MasploitzUI.updateStatus("Found crowded spot! Pathfinding...", Color3.fromRGB(255, 200, 100))
-            else
-                getgenv().MasploitzUI.updateStatus("Found busier spot! Moving...", Color3.fromRGB(255, 200, 100))
-            end
+            getgenv().MasploitzUI.updateStatus(np and "Crowded spot! Pathfinding..." or "Busier spot!", Color3.fromRGB(255, 200, 100))
         end
         
-        if needsPath then
-            -- Use pathfinding for crowded spots
-            local PathfindingService = game:GetService("PathfindingService")
-            local path = PathfindingService:CreatePath()
-            
-            local success = pcall(function()
-                path:ComputeAsync(root.Position, bestSpot.Position)
-            end)
-            
-            if success and path.Status == Enum.PathStatus.Success then
-                local waypoints = path:GetWaypoints()
-                
-                for _, waypoint in pairs(waypoints) do
-                    if waypoint.Action == Enum.PathWaypointAction.Jump then
-                        hum.Jump = true
-                    end
-                    hum:MoveTo(waypoint.Position)
-                    hum.MoveToFinished:Wait()
+        if np then
+            local PFS = game:GetService("PathfindingService")
+            local pth = PFS:CreatePath()
+            local ok = pcall(function() pth:ComputeAsync(rt.Position, bs.Position) end)
+            if ok and pth.Status == Enum.PathStatus.Success then
+                for _, wp in pairs(pth:GetWaypoints()) do
+                    if wp.Action == Enum.PathWaypointAction.Jump then h.Jump = true end
+                    h:MoveTo(wp.Position) h.MoveToFinished:Wait()
                 end
-            else
-                hum:MoveTo(bestSpot.Position)
-                wait(3)
-            end
+            else h:MoveTo(bs.Position) wait(3) end
         else
-            -- Direct walk for normal spots
-            hum.WalkSpeed = cfg.WALK_SPEED_NORMAL
-            hum:MoveTo(bestSpot.Position)
-            
-            local dist = (root.Position - bestSpot.Position).Magnitude
-            wait(dist / cfg.WALK_SPEED_NORMAL + 1)
+            h.WalkSpeed = cfg.WALK_SPEED_NORMAL h:MoveTo(bs.Position)
+            wait((rt.Position - bs.Position).Magnitude / cfg.WALK_SPEED_NORMAL + 1)
         end
         
-        root.CFrame = bestSpot
-        state.savedPos = bestSpot
-        
-        if getgenv().MasploitzUI then
-            getgenv().MasploitzUI.updateStatus("Relocated! (" .. bestCount .. " nearby)", Color3.fromRGB(100, 200, 255))
-        end
+        rt.CFrame = bs st.savedPos = bs
+        if getgenv().MasploitzUI then getgenv().MasploitzUI.updateStatus("Relocated! (" .. bc .. ")", Color3.fromRGB(100, 200, 255)) end
         wait(2)
-        if getgenv().MasploitzUI then
-            getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
-        end
-        
-        state.relocating = false
+        if getgenv().MasploitzUI then getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100)) end
+        st.relocating = false
     end
 end
 
--- NEW: Random chat messages
-local function sendChat()
-    if cfg.ENABLE_CHAT_MESSAGES and tick() - state.lastChat > math.random(cfg.CHAT_INTERVAL_MIN, cfg.CHAT_INTERVAL_MAX) then
+-- Chat/Emote/Camera
+local function cht()
+    if cfg.ENABLE_CHAT_MESSAGES and tick() - st.lastChat > math.random(cfg.CHAT_INTERVAL_MIN, cfg.CHAT_INTERVAL_MAX) then
         pcall(function()
-            local msg = cfg.CHAT_MESSAGES[math.random(1, #cfg.CHAT_MESSAGES)]
-            game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(msg, "All")
-            state.lastChat = tick()
+            game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(
+                cfg.CHAT_MESSAGES[math.random(1, #cfg.CHAT_MESSAGES)], "All")
+            st.lastChat = tick()
         end)
     end
 end
 
--- NEW: Random emotes
-local function playEmote()
-    if cfg.ENABLE_EMOTES and tick() - state.lastEmote > math.random(cfg.EMOTE_INTERVAL_MIN, cfg.EMOTE_INTERVAL_MAX) then
-        local hum = P.Character and P.Character:FindFirstChild("Humanoid")
-        if hum then
-            local emotes = hum:GetPlayingAnimationTracks()
-            if #emotes > 0 then
-                emotes[1]:Stop()
-            end
+local function emt()
+    if cfg.ENABLE_EMOTES and tick() - st.lastEmote > math.random(cfg.EMOTE_INTERVAL_MIN, cfg.EMOTE_INTERVAL_MAX) then
+        local h = P.Character and P.Character:FindFirstChild("Humanoid")
+        if h then
+            local e = h:GetPlayingAnimationTracks()
+            if #e > 0 then e[1]:Stop() end
         end
-        state.lastEmote = tick()
+        st.lastEmote = tick()
     end
 end
 
--- NEW: Camera movement
-local function moveCamera()
-    if cfg.ENABLE_CAMERA_MOVE and tick() - state.lastCamera > math.random(cfg.CAMERA_INTERVAL_MIN, cfg.CAMERA_INTERVAL_MAX) then
-        local cam = workspace.CurrentCamera
-        if cam then
-            local currentCF = cam.CFrame
-            local offset = CFrame.Angles(math.rad(math.random(-10, 10)), math.rad(math.random(-20, 20)), 0)
-            
-            local tween = TS:Create(cam, TweenInfo.new(2, Enum.EasingStyle.Quad), {CFrame = currentCF * offset})
-            tween:Play()
+local function cam()
+    if cfg.ENABLE_CAMERA_MOVE and tick() - st.lastCamera > math.random(cfg.CAMERA_INTERVAL_MIN, cfg.CAMERA_INTERVAL_MAX) then
+        local cm = workspace.CurrentCamera
+        if cm then
+            local ccf = cm.CFrame
+            local off = CFrame.Angles(math.rad(math.random(-10, 10)), math.rad(math.random(-20, 20)), 0)
+            TS:Create(cm, TweenInfo.new(2, Enum.EasingStyle.Quad), {CFrame = ccf * off}):Play()
         end
-        state.lastCamera = tick()
+        st.lastCamera = tick()
+    end
+end
+
+-- Re-equip
+local function reEq()
+    if not cfg.AUTO_RE_EQUIP then return end
+    local c = P.Character if not c then return end
+    local h = c:FindFirstChild("Humanoid") if not h then return end
+    if c:FindFirstChild(cfg.AUTO_EQUIP_TOOL) then return end
+    
+    local bp = P:FindFirstChild("Backpack")
+    if bp then
+        local t = bp:FindFirstChild(cfg.AUTO_EQUIP_TOOL)
+        if t then
+            pcall(function()
+                h:EquipTool(t)
+                if getgenv().MasploitzUI then
+                    getgenv().MasploitzUI.updateStatus("Tool Re-equipped", Color3.fromRGB(100, 255, 150))
+                    wait(1) getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
+                end
+            end)
+        end
     end
 end
 
 -- Anti-AFK
 local vu = game:GetService('VirtualUser')
-
 P.Idled:Connect(function()
-    if state.enabled then
-        vu:CaptureController()
-        vu:ClickButton2(Vector2.new())
+    if st.enabled then
+        vu:CaptureController() vu:ClickButton2(Vector2.new())
         if getgenv().MasploitzUI then
             getgenv().MasploitzUI.updateStatus("Kick Blocked!", Color3.fromRGB(255, 200, 0))
-        end
-        wait(2)
-        if getgenv().MasploitzUI then
-            getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
+            wait(2) getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
         end
     end
 end)
--- Auto Re-Equip Tool (for when tool gets unequipped)
-local function reEquipTool()
-    if not cfg.AUTO_RE_EQUIP then return end
-    
-    local c = P.Character
-    if not c then return end
-    
-    local hum = c:FindFirstChild("Humanoid")
-    if not hum then return end
-    
-    -- Check if tool is already equipped
-    local equippedTool = c:FindFirstChild(cfg.AUTO_EQUIP_TOOL)
-    if equippedTool then 
-        if cfg.DEBUG_MODE then
-            print("🔧 Tool already equipped, skipping re-equip")
-        end
-        return 
-    end
-    
-    -- Try to equip from backpack
-    local backpack = P:FindFirstChild("Backpack")
-    if backpack then
-        local tool = backpack:FindFirstChild(cfg.AUTO_EQUIP_TOOL)
-        if tool then
-            pcall(function()
-                hum:EquipTool(tool)
-                if cfg.DEBUG_MODE then
-                    print("🔧 Re-equipped tool:", cfg.AUTO_EQUIP_TOOL)
-                end
-                if getgenv().MasploitzUI then
-                    getgenv().MasploitzUI.updateStatus("Tool Re-equipped", Color3.fromRGB(100, 255, 150))
-                    wait(1)
-                    getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
-                end
-            end)
-        else
-            if cfg.DEBUG_MODE then
-                warn("⚠️ Tool not found in backpack:", cfg.AUTO_EQUIP_TOOL)
-            end
-        end
-    end
-end
 
--- Movement loops
-spawn(function() while wait(math.random(cfg.RANDOM_MOVE_MIN, cfg.RANDOM_MOVE_MAX)) do if state.enabled then move() end end end)
-spawn(function() while wait(cfg.REGULAR_MOVE_INTERVAL) do if state.enabled and P.Character then move() end end end)
-spawn(function() while wait(math.random(cfg.MICRO_MOVE_MIN, cfg.MICRO_MOVE_MAX)) do if state.enabled then pcall(function() vu:CaptureController() vu:ClickButton2(Vector2.new()) end) end end end)
-
--- Spot checks
-spawn(function() while wait(cfg.SPOT_CHECK_INTERVAL) do if state.enabled and not state.relocating and not state.moving then relocate() end end end)
-spawn(function() 
-    while wait(cfg.BLOCK_CHECK_INTERVAL) do 
-        if state.enabled and not state.relocating and not state.moving then 
-            local c = P.Character 
-            if c and c:FindFirstChild("HumanoidRootPart") then 
-                -- Check both front blocking and proximity blocking
-                if isPlayerInFront(c.HumanoidRootPart.CFrame) or isPlayerBlocking(c.HumanoidRootPart.Position) then 
-                    relocate() 
-                end 
-            end 
-        end 
-    end 
-end)
-
--- Anti-detection features
-spawn(function() while wait(10) do if state.enabled then sendChat() playEmote() moveCamera() end end end)
-
--- Auto Re-Equip Tool Loop
-spawn(function() 
-    while wait(cfg.RE_EQUIP_INTERVAL) do 
-        if state.enabled and cfg.AUTO_RE_EQUIP then 
-            reEquipTool() 
-        end 
-    end 
-end)
-
--- Auto hop
-spawn(function()
-    wait(cfg.AUTO_HOP_TIME)
-    wait(2)
-    serverHop()
-end)
+-- Loops
+spawn(function() while wait(math.random(cfg.RANDOM_MOVE_MIN, cfg.RANDOM_MOVE_MAX)) do if st.enabled then mv() end end end)
+spawn(function() while wait(cfg.REGULAR_MOVE_INTERVAL) do if st.enabled and P.Character then mv() end end end)
+spawn(function() while wait(math.random(cfg.MICRO_MOVE_MIN, cfg.MICRO_MOVE_MAX)) do if st.enabled then pcall(function() vu:CaptureController() vu:ClickButton2(Vector2.new()) end) end end end)
+spawn(function() while wait(cfg.SPOT_CHECK_INTERVAL) do if st.enabled and not st.relocating and not st.moving then rlc() end end end)
+spawn(function() while wait(cfg.BLOCK_CHECK_INTERVAL) do if st.enabled and not st.relocating and not st.moving then local c = P.Character if c and c:FindFirstChild("HumanoidRootPart") then if chkFrt(c.HumanoidRootPart.CFrame) or chkBlk(c.HumanoidRootPart.Position) then rlc() end end end end end)
+spawn(function() while wait(10) do if st.enabled then cht() emt() cam() end end end)
+spawn(function() while wait(cfg.RE_EQUIP_INTERVAL) do if st.enabled and cfg.AUTO_RE_EQUIP then reEq() end end end)
+spawn(function() wait(cfg.AUTO_HOP_TIME) wait(2) serverHop() end)
 
 -- Character handling
 P.CharacterAdded:Connect(function()
     wait(2)
-    if state.savedPos and state.enabled then
+    if st.savedPos and st.enabled then
         local c = P.Character
         if c and c:FindFirstChild("HumanoidRootPart") then
-            c.HumanoidRootPart.CFrame = state.savedPos
-            if getgenv().MasploitzUI then
-                getgenv().MasploitzUI.updateStatus("Respawned at AFK Pos", Color3.fromRGB(100, 200, 255))
-            end
+            c.HumanoidRootPart.CFrame = st.savedPos
+            if getgenv().MasploitzUI then getgenv().MasploitzUI.updateStatus("Respawned", Color3.fromRGB(100, 200, 255)) end
             wait(2)
         end
     end
-    
-    spawn(function()
-        wait(1)
-        for i = 1, 10 do
-            if equipTool() then break end
-            wait(0.5)
-        end
-    end)
-    
-    if state.enabled and getgenv().MasploitzUI then
-        getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
-    end
+    spawn(function() wait(1) for i = 1, 10 do if eq() then break end wait(0.5) end end)
+    if st.enabled and getgenv().MasploitzUI then getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100)) end
 end)
 
 -- Initial spawn
@@ -645,92 +433,51 @@ spawn(function()
     repeat wait() until P.Character and P.Character:FindFirstChild("HumanoidRootPart")
     wait(1)
     
-    local bestSpot, playerCount, needsPath = findBestSpot(nil)
-    
-    if not bestSpot then
-        local randomPos = cfg.SPAWN_POSITIONS[math.random(1, #cfg.SPAWN_POSITIONS)]
-        bestSpot = createCFrameFacingCenter(randomPos)
-        playerCount = 0
-        needsPath = false
+    local bs, pc, np = fndBst(nil, nil)
+    if not bs then
+        bs = faceCtr(cfg.SPAWN_POSITIONS[math.random(1, #cfg.SPAWN_POSITIONS)])
+        pc = 0 np = false
     end
     
-    -- If we need pathfinding, walk there first
-    if needsPath and P.Character and P.Character:FindFirstChild("Humanoid") then
-        local hum = P.Character.Humanoid
-        local root = P.Character.HumanoidRootPart
-        
-        if cfg.DEBUG_MODE then
-            print("🚶 Using pathfinding to reach crowded area...")
-        end
-        
-        local PathfindingService = game:GetService("PathfindingService")
-        local path = PathfindingService:CreatePath()
-        
-        local success = pcall(function()
-            path:ComputeAsync(root.Position, bestSpot.Position)
-        end)
-        
-        if success and path.Status == Enum.PathStatus.Success then
-            local waypoints = path:GetWaypoints()
-            
-            for _, waypoint in pairs(waypoints) do
-                if waypoint.Action == Enum.PathWaypointAction.Jump then
-                    hum.Jump = true
-                end
-                hum:MoveTo(waypoint.Position)
-                hum.MoveToFinished:Wait()
+    if np and P.Character and P.Character:FindFirstChild("Humanoid") then
+        local h = P.Character.Humanoid
+        local rt = P.Character.HumanoidRootPart
+        local PFS = game:GetService("PathfindingService")
+        local pth = PFS:CreatePath()
+        local ok = pcall(function() pth:ComputeAsync(rt.Position, bs.Position) end)
+        if ok and pth.Status == Enum.PathStatus.Success then
+            for _, wp in pairs(pth:GetWaypoints()) do
+                if wp.Action == Enum.PathWaypointAction.Jump then h.Jump = true end
+                h:MoveTo(wp.Position) h.MoveToFinished:Wait()
             end
         end
     end
     
-    P.Character.HumanoidRootPart.CFrame = bestSpot
-    state.savedPos = bestSpot
-    
-    -- Wait for UI to load
-    for i = 1, 20 do
-        if getgenv().MasploitzUI then break end
-        wait(0.1)
-    end
+    P.Character.HumanoidRootPart.CFrame = bs st.savedPos = bs
+    for i = 1, 20 do if getgenv().MasploitzUI then break end wait(0.1) end
     
     if getgenv().MasploitzUI then
-        local statusMsg = needsPath and 
-            "Found crowded area! (" .. playerCount .. " nearby)" or
-            "Spawned at best spot (" .. playerCount .. " nearby)"
-        getgenv().MasploitzUI.updateStatus(statusMsg, Color3.fromRGB(100, 200, 255))
-        spawn(function()
-            getgenv().MasploitzUI.showSavedPos()
-        end)
+        getgenv().MasploitzUI.updateStatus(np and "Crowded area! (" .. pc .. ")" or "Best spot (" .. pc .. ")", Color3.fromRGB(100, 200, 255))
+        spawn(function() getgenv().MasploitzUI.showSavedPos() end)
     end
-    
-    if cfg.DEBUG_MODE then
-        print("📍 Initial spawn - Players nearby:", playerCount, "| Pathfinding used:", needsPath)
-    end
-    
-    wait(1)
-    equipTool()
-    
-    wait(2)
-    if getgenv().MasploitzUI then
-        getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100))
-    end
+    wait(1) eq() wait(2)
+    if getgenv().MasploitzUI then getgenv().MasploitzUI.updateStatus("Active", Color3.fromRGB(0, 255, 100)) end
 end)
 
 print("✅ Masploitz Backend initialized")
 
--- Expose functions for UI
+-- Exposed functions
 getgenv().MasploitzFunctions = {
     serverHop = serverHop,
     savePosition = function()
         local c = P.Character
         if c and c:FindFirstChild("HumanoidRootPart") then
-            state.savedPos = c.HumanoidRootPart.CFrame
-            return true
+            st.savedPos = c.HumanoidRootPart.CFrame return true
         end
         return false
     end,
     toggleEnabled = function()
-        state.enabled = not state.enabled
-        return state.enabled
+        st.enabled = not st.enabled return st.enabled
     end,
-    reEquipTool = reEquipTool  -- Expose for manual re-equip from UI if needed
+    reEquipTool = reEq
 }
