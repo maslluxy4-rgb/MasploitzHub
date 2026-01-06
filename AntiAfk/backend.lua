@@ -104,7 +104,7 @@ end
 local function createLookAtCFrame(pos)
     if not isValidPosition(pos) then return nil end
     
-    local center = Vector3.new(0, pos.Y, 0)
+    local center = Vector3.new(0, 0, 0)
     local lookVec = (center - pos).Unit
     
     -- Ensure look vector is valid
