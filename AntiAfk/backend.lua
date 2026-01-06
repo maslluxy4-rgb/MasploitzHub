@@ -445,8 +445,10 @@ local function performMovement()
         -- Brief pause
         task.wait(math.random(15, 35) / 10)
         
-        -- Validate position
+        -- Face center and validate position
         hum.WalkSpeed = cfg.WALK_SPEED_NORMAL
+        root.CFrame = createLookAtCFrame(root.Position)
+        task.wait(0.1)
         
         if not validatePosition(root, savedCF) then
             if cfg.DEBUG_MODE then
@@ -598,12 +600,17 @@ local function relocatePosition()
                 else
                     hum:MoveTo(bestSpot.Position)
                     task.wait(3)
+                    # Face center after walking
+                    root.CFrame = createLookAtCFrame(root.Position)
                 end
             else
                 hum.WalkSpeed = cfg.WALK_SPEED_NORMAL
                 hum:MoveTo(bestSpot.Position)
                 local walkDist = (root.Position - bestSpot.Position).Magnitude
                 task.wait(walkDist / cfg.WALK_SPEED_NORMAL + 1)
+                
+                # Face center after walking
+                root.CFrame = createLookAtCFrame(root.Position)
             end
             
             task.wait(0.5)
@@ -897,6 +904,8 @@ task.spawn(function()
         else
             hum:MoveTo(bestSpot.Position)
             task.wait(2)
+            # Face center after positioning
+            root.CFrame = createLookAtCFrame(root.Position)
         end
         
         st.savedPos = root.CFrame
